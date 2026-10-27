@@ -1,0 +1,13 @@
+# Private data and Google keys never leave this computer.
+store/
+config/
+# Made by the demo script; rebuilt on every run.
+demo/
+# Older static versions with real names in them, and the one-time move from them.
+archive/
+scripts/migrate-v1.mjs
+# Clutter
+.DS_Store
+*.log
+*.tmp
+node_modules/
