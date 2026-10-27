@@ -1,4 +1,4 @@
-# Install Site Analytics with Claude
+# Install Designer Job Search with Claude
 
 You do not need to use Terminal yourself. Claude Code can download the app, start it, and open
 it in your browser. You then do the short setup in the app.
@@ -16,10 +16,10 @@ If you do not have Claude Code yet, see [claude.com/claude-code](https://claude.
 ## 2. Paste this prompt
 
 ```text
-Install the Site Analytics app for me from https://github.com/vandy1690/site-analytics.
+Install the Designer Job Search app for me from https://github.com/vandy1690/designer-job-search.
 
 1. Check that Node.js 20 or later is installed (node -v). If it is missing or older, tell me how to install the LTS version from nodejs.org, and wait for me.
-2. Put the app in a folder named site-analytics in my home folder. Use git clone if git is installed. Otherwise download the ZIP of the main branch and unzip it there.
+2. Put the app in a folder named designer-job-search in my home folder. Use git clone if git is installed. Otherwise download the ZIP of the main branch and unzip it there.
 3. Read README.md and CLAUDE.md in that folder before doing anything else.
 4. Start the app with "node server.mjs" from that folder, and open http://localhost:4340/ in my browser.
 5. Ask me if the app should start on its own when I log in. Only if I say yes, run "scripts/login-item.sh install" (Mac only). If I say no, tell me the command to start it again later.
@@ -55,8 +55,8 @@ It does not:
 
 ## Later
 
-- **Start it again:** in Terminal, `cd ~/site-analytics && node server.mjs`, or ask Claude to
-  "start Site Analytics".
-- **Update it:** ask Claude to "update Site Analytics with git pull and restart it".
-- **Try the demo:** ask Claude to "run the Site Analytics demo", then open
+- **Start it again:** in Terminal, `cd ~/designer-job-search && node server.mjs`, or ask Claude to
+  "start Designer Job Search".
+- **Update it:** ask Claude to "update Designer Job Search with git pull and restart it".
+- **Try the demo:** ask Claude to "run the Designer Job Search demo", then open
   [http://localhost:4341/](http://localhost:4341/).

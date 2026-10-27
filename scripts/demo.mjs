@@ -1,4 +1,4 @@
-// Runs Site Analytics on made-up data, so you can look around before connecting anything.
+// Runs Designer Job Search on made-up data, so you can look around before connecting anything.
 //   node scripts/demo.mjs           demo data at http://localhost:4341/
 //   node scripts/demo.mjs --empty   a fresh install, to see the first-run setup
 //   node scripts/demo.mjs --write   only write the demo data to demo/store, then stop

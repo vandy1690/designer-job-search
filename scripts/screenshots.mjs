@@ -55,7 +55,10 @@ async function main() {
 
   const js = async (expression) => (await c.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result.value;
   const size = (height) => c.send("Emulation.setDeviceMetricsOverride", { width: 1440, height, deviceScaleFactor: 2, mobile: false });
-  const settle = async () => { await js(`new Promise((r) => { const t = setInterval(() => { if (!document.getElementById("boot")) { clearInterval(t); r(true); } }, 50); })`); await js("document.fonts.ready.then(() => true)"); await sleep(500); };
+  // Show the font everyone else gets. This Mac may have Nickel Gothic installed, which the app
+  // would otherwise find and use.
+  const publicFont = `if (!document.getElementById("shot-font")) document.head.insertAdjacentHTML("beforeend", '<style id="shot-font">:root { --sdc-font-display: "League Gothic", "Inter", system-ui, sans-serif; }</style>'); true`;
+  const settle = async () => { await js(`new Promise((r) => { const t = setInterval(() => { if (!document.getElementById("boot")) { clearInterval(t); r(true); } }, 50); })`); await js(publicFont); await js("document.fonts.ready.then(() => true)"); await sleep(500); };
   const open = async (url) => { const loaded = c.event("Page.loadEventFired"); await c.send("Page.navigate", { url }); await loaded; await settle(); };
   const reload = async () => { const loaded = c.event("Page.loadEventFired"); await c.send("Page.reload", {}); await loaded; await settle(); };
   const view = async (hash) => { await js(`location.hash = ${JSON.stringify(hash)}; true`); await sleep(500); };

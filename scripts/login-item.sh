@@ -1,15 +1,15 @@
 #!/bin/zsh
-# Keeps the Site Analytics server running in the background, starting at login, so automatic
+# Keeps the Designer Job Search server running in the background, starting at login, so automatic
 # pulls happen even when the dashboard is closed. macOS LaunchAgent; affects only this user.
 #   scripts/login-item.sh install     start now and at every login
 #   scripts/login-item.sh uninstall   stop and remove
 #   scripts/login-item.sh status
 set -e
-LABEL="local.site-analytics"
+LABEL="local.designer-job-search"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 NODE="$(command -v node)"
-LOG_DIR="$HOME/Library/Logs/site-analytics"
+LOG_DIR="$HOME/Library/Logs/designer-job-search"
 
 case "${1:-status}" in
   install)
@@ -32,7 +32,7 @@ case "${1:-status}" in
 EOF
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
     launchctl bootstrap "gui/$(id -u)" "$PLIST"
-    echo "Installed. Site Analytics runs at http://localhost:4340/ and pulls on its own."
+    echo "Installed. Designer Job Search runs at http://localhost:4340/ and pulls on its own."
     ;;
   uninstall)
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true

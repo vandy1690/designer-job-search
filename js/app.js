@@ -1,4 +1,4 @@
-// Site Analytics: the page. Reads the app's data from the local server, renders every view,
+// Designer Job Search: the page. Reads the app's data from the local server, renders every view,
 // and edits applications, contacts, matches and settings. Pulls run on the server.
 import { loadAll, save, api } from "./store.js";
 import { countsOf, atsOfUrl, companyKey, metroLabel } from "./engine.js";
@@ -119,7 +119,7 @@ function show(focus) {
   document.querySelectorAll(".dash-view").forEach((s) => { s.hidden = s.getAttribute("data-view") !== v.id; });
   $("view-title").textContent = v.label;
   $("view-sub").textContent = v.sub;
-  document.title = `${v.label} · Site Analytics`;
+  document.title = `${v.label} · Designer Job Search`;
   markCurrent();
   window.scrollTo(0, 0);
   if (focus) $("view-title").focus();
@@ -141,6 +141,20 @@ function setTheme(t) {
   document.documentElement.setAttribute("data-theme", t);
   $("theme-toggle").setAttribute("aria-label", t === "dark" ? "Switch to light theme" : "Switch to dark theme");
   try { localStorage.setItem("dash-theme", t); } catch (e) { /* private mode */ }
+}
+
+// Loads the Adobe Fonts kit from Settings (or removes it), and remembers it so boot.js can load
+// it before the page draws next time.
+function useFontKit(kit) {
+  const ok = kit && /^[a-z0-9]{5,12}$/.test(kit);
+  try { if (ok) localStorage.setItem("dash-font-kit", kit); else localStorage.removeItem("dash-font-kit"); } catch (e) { /* private mode */ }
+  const cur = $("font-kit");
+  if (cur && (!ok || cur.getAttribute("href") !== `https://use.typekit.net/${kit}.css`)) cur.remove();
+  if (ok && !$("font-kit")) {
+    const l = document.createElement("link");
+    l.rel = "stylesheet"; l.href = `https://use.typekit.net/${kit}.css`; l.id = "font-kit";
+    document.head.appendChild(l);
+  }
 }
 
 /* ---------- Helpers over the data ---------- */
@@ -868,7 +882,7 @@ function setupSteps() {
     { id: "project", title: "Open Google Cloud",
       body: `<p>Sign in with the Google account you use for Google Analytics.</p>
         <p>At the top left, next to the words <b>Google Cloud</b>, you will see a project name. The one already there is fine.</p>
-        <p class="dash-note">If it says <b>Select a project</b> instead: click it, click <b>New project</b>, type ${copyChip("Site Analytics")}, and click <b>Create</b>.</p>`,
+        <p class="dash-note">If it says <b>Select a project</b> instead: click it, click <b>New project</b>, type ${copyChip("Designer Job Search")}, and click <b>Create</b>.</p>`,
       links: [["Open Google Cloud", "https://console.cloud.google.com/"]] },
     { id: "apis", title: "Turn on Google Analytics access",
       body: `<p>There are two pages. On each one, click the blue <b>Enable</b> button.</p>
@@ -877,7 +891,7 @@ function setupSteps() {
     { id: "robot", title: "Make a robot account for the app",
       body: `<p>The app signs in to Google with its own robot account. Google calls it a <b>service account</b>.</p>
         <ol class="dash-steps-list">
-          <li><b>Service account name:</b> paste ${copyChip("site-analytics")}</li>
+          <li><b>Service account name:</b> paste ${copyChip("designer-job-search")}</li>
           <li>Click <b>Create and continue</b>.</li>
           <li>On <b>Permissions (optional)</b>, click <b>Continue</b> without choosing anything.</li>
           <li>Click <b>Done</b>.</li>
@@ -885,7 +899,7 @@ function setupSteps() {
       links: [["Open the robot account page", "https://console.cloud.google.com/iam-admin/serviceaccounts/create"]] },
     { id: "key", title: "Download the robot's key",
       body: `<ol class="dash-steps-list">
-          <li>In the list, click the email that starts with <b>site-analytics</b>.</li>
+          <li>In the list, click the email that starts with <b>designer-job-search</b>.</li>
           <li>Click the <b>Keys</b> tab.</li>
           <li>Click <b>Add key</b>, then <b>Create new key</b>.</li>
           <li>Choose <b>JSON</b> and click <b>Create</b>. A file downloads to your Downloads folder.</li>
@@ -930,7 +944,7 @@ function signInHtml() {
     <div class="dash-setup">
       <p class="dash-note">Use this only if Google will not let you make a key. After steps 1 and 2 above:</p>
       <ol class="dash-steps-list">
-        <li>Open the ${extLinkText("sign-in setup", "https://console.cloud.google.com/auth/overview")}, click <b>Get started</b>, name it ${copyChip("Site Analytics")}, pick your email, choose <b>External</b>, type your email, agree, and click <b>Create</b>.</li>
+        <li>Open the ${extLinkText("sign-in setup", "https://console.cloud.google.com/auth/overview")}, click <b>Get started</b>, name it ${copyChip("Designer Job Search")}, pick your email, choose <b>External</b>, type your email, agree, and click <b>Create</b>.</li>
         <li>Open ${extLinkText("Data access", "https://console.cloud.google.com/auth/scopes")}, click <b>Add or remove scopes</b>, filter for ${copyChip("analytics.readonly")}, check it, click <b>Update</b>, then <b>Save</b>.</li>
         <li>Open ${extLinkText("Audience", "https://console.cloud.google.com/auth/audience")}. Under <b>Test users</b>, click <b>+ Add users</b>, add your own Gmail address, and save. Leave the status on <b>Testing</b>.</li>
         <li>Open ${extLinkText("Clients", "https://console.cloud.google.com/auth/clients")}, click <b>+ Create client</b>, choose <b>Desktop app</b>, click <b>Create</b>, and paste the two codes below.</li>
@@ -1032,6 +1046,7 @@ function renderSettings() {
       ${field("p-strong", "Same-hour window", select("p-strong", String((st.scoring || {}).strongHours || 2), [["1", "1 hour"], ["2", "2 hours"], ["3", "3 hours"]]), { hint: "A visit this close to a contact, from a place that fits, earns high odds." })}
       <p class="dash-note dash-span2">Visits that match any line below are left out. One entry per line.</p>
       ${lists.map(([k, label, hint]) => field(`x-${k}`, label, textarea(`x-${k}`, (ex[k] || []).join("\n")), { hint })).join("")}
+      ${field("x-kit", "Adobe Fonts kit (optional)", input("x-kit", st.fontKit || "", "text", 'placeholder="abc1234" autocomplete="off" spellcheck="false"'), { hint: "Headings use Nickel Gothic when your Adobe Fonts kit has it, and League Gothic otherwise. To use your kit, type its ID (the code in its embed link) and add localhost to the kit's domains in Adobe Fonts." })}
       ${field("x-pages", "Page names", textarea("x-pages", Object.entries(st.pageNames || {}).map(([k, v]) => `${k} | ${v}`).join("\n")), { span: true, hint: "Only for pages whose name reads wrong. One per line: the page's address | its name. Example: paypal | PayPal." })}
       <div class="dash-span2 dash-inline"><button type="submit" class="sdc-btn sdc-btn--primary">Save</button><span class="dash-note" id="filter-status" role="status" aria-live="polite"></span></div>
     </form></details></div></sdc-card>`;
@@ -1151,6 +1166,10 @@ function renderSettings() {
     e.preventDefault();
     st.scoring = { ...(st.scoring || {}), windowDays: +$("p-window").value, strongHours: +$("p-strong").value };
     st.exclude = Object.fromEntries(lists.map(([k]) => [k, $(`x-${k}`).value.split("\n").map((x) => x.trim()).filter(Boolean)]));
+    const kit = $("x-kit").value.trim().toLowerCase();
+    if (kit && !/^[a-z0-9]{5,12}$/.test(kit)) { $("filter-status").textContent = "The Adobe Fonts kit ID is letters and numbers only, like abc1234."; return; }
+    st.fontKit = kit;
+    useFontKit(kit);
     st.pageNames = Object.fromEntries($("x-pages").value.split("\n").map((x) => x.split("|").map((y) => y.trim())).filter(([k, v]) => k && v).map(([k, v]) => [k.toLowerCase().replace(/^\/+|\/+$/g, ""), v]));
     await save("settings", st);
     $("filter-status").textContent = "Saved. The next check uses these.";
@@ -1234,8 +1253,8 @@ const linesOf = (id) => $(id).value.split(/\n|,/).map((x) => x.trim().toLowerCas
 
 function welcomeSteps() {
   return [
-    { title: "Welcome to Site Analytics", body: `
-      <p>Site Analytics watches who reads your portfolio and helps you act on it.</p>
+    { title: "Welcome to Designer Job Search", body: `
+      <p>Designer Job Search watches who reads your portfolio and helps you act on it.</p>
       <ul class="dash-iconlist">
         <li>${tile("pull")}<div><h3>Which applications reached a person</h3><p>It matches your website's visits to the jobs you applied to, and estimates who looked and when.</p></div></li>
         <li>${tile("warm")}<div><h3>Jobs that fit, and who to contact</h3><p>It checks companies' own job boards every day and suggests someone to reach out to about each match.</p></div></li>
@@ -1275,7 +1294,7 @@ function renderWelcome() {
   const s = steps[W.step];
   $("view-title").textContent = s.title;
   $("view-sub").textContent = `Setup, step ${W.step + 1} of ${steps.length}`;
-  document.title = "Welcome · Site Analytics";
+  document.title = "Welcome · Designer Job Search";
   $("c-welcome").innerHTML = `<sdc-card><div class="dash-panel dash-welcome">
     <form id="w-form" novalidate>
       ${s.body}
@@ -1326,6 +1345,7 @@ async function boot() {
     return;
   }
   $("boot").remove();
+  useFontKit(S.settings && S.settings.fontKit);
   $("theme-toggle").onclick = () => setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
   if (!S.settings || !S.settings.onboarded) {
     document.body.classList.add("is-welcome");

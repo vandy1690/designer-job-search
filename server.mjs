@@ -1,4 +1,4 @@
-// Site Analytics local server. No dependencies: `node server.mjs`, then open http://localhost:4340/
+// Designer Job Search local server. No dependencies: `node server.mjs`, then open http://localhost:4340/
 // Serves the app, keeps its data as JSON files in ./store, holds the Google connection, and pulls
 // Google Analytics on its own every few hours while it runs. Answers this machine only: it binds
 // to the loopback addresses, checks the Host header, and refuses cross-site writes.
@@ -25,19 +25,19 @@ const KEEP_BACKUPS = 30;
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml",
-  ".png": "image/png", ".ico": "image/x-icon"
+  ".png": "image/png", ".ico": "image/x-icon", ".woff2": "font/woff2"
 };
 const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
 // Only these files are ever served, matched exactly and case-sensitively. macOS ignores case in
 // file names, so a deny list is not enough: /STORE/... would otherwise reach ./store.
-const PUBLIC = /^(index\.html|sdc\.css|css\/[a-z0-9-]+\.css|js\/[a-z0-9-]+\.js|brand\/[A-Za-z0-9_-]+\.svg)$/;
+const PUBLIC = /^(index\.html|sdc\.css|css\/[a-z0-9-]+\.css|js\/[a-z0-9-]+\.js|fonts\/[a-z0-9-]+\.woff2)$/;
 // Sent with every response.
 const SECURITY_HEADERS = {
   "Content-Security-Policy": [
     "default-src 'none'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://use.typekit.net https://p.typekit.net https://fonts.googleapis.com",
-    "font-src https://use.typekit.net https://fonts.gstatic.com",
+    "font-src 'self' https://use.typekit.net https://fonts.gstatic.com",
     "img-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",
@@ -137,7 +137,7 @@ async function refreshLeads() {
 }
 
 async function api(req, res, path) {
-  if (!apiAllowed(req)) return send(res, 403, { error: "Refused: this request did not come from the Site Analytics page." });
+  if (!apiAllowed(req)) return send(res, 403, { error: "Refused: this request did not come from the Designer Job Search page." });
 
   const m = path.match(/^\/api\/store\/([a-z]+)$/);
   if (m) {
@@ -158,7 +158,7 @@ async function api(req, res, path) {
   }
 
   if (DEMO) {
-    if (path === "/api/google/status") return send(res, 200, { mode: "service", connected: true, serviceEmail: "site-analytics@demo-project.iam.gserviceaccount.com", connectedAt: new Date().toISOString(), hasClient: false, clientId: "" });
+    if (path === "/api/google/status") return send(res, 200, { mode: "service", connected: true, serviceEmail: "designer-job-search@demo-project.iam.gserviceaccount.com", connectedAt: new Date().toISOString(), hasClient: false, clientId: "" });
     if (path === "/api/google/properties") {
       const st = JSON.parse(await readFile(join(STORE, "settings.json"), "utf8").catch(() => "{}"));
       return send(res, 200, (st.sites || []).filter((x) => x.propertyId).map((x) => ({ id: x.propertyId, name: x.propertyName || x.name, account: "Demo account" })));
@@ -266,7 +266,7 @@ async function autoPull() {
 await lockDown(STORE);
 await lockDown(CONFIG);
 createServer(handle).listen(PORT, "127.0.0.1", () => {
-  console.log(`Site Analytics${DEMO ? " (demo)" : ""}: http://localhost:${PORT}/`);
+  console.log(`Designer Job Search${DEMO ? " (demo)" : ""}: http://localhost:${PORT}/`);
   setTimeout(autoPull, 60 * 1000);
   setInterval(autoPull, 60 * 60 * 1000);
 });

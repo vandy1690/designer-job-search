@@ -1,4 +1,4 @@
-# Site Analytics: notes for Claude
+# Designer Job Search: notes for Claude
 
 A local app that matches a job seeker's website visits (Google Analytics 4) to the jobs they
 applied to, and finds open jobs with someone to reach out to. Read README.md first.
@@ -54,6 +54,11 @@ the server is stopped. Screenshots for the repo must come from the demo, never f
   `.sdc-btn`, `.sdc-field`, `.sdc-pager` and so on). Pieces SDC does not have yet are local `dash-*`
   classes in `css/dash.css`, built from SDC tokens only. No raw colors, no outside UI frameworks.
   `sdc.css` is a copy: do not edit it here.
+- **Type and brand.** The brand is set in type ("Designer Job Search, by Steven Design Services",
+  initials DJS on the collapsed rail); there is no logo file. Headings use Nickel Gothic only when
+  this computer can load it (an Adobe Fonts kit ID in `settings.fontKit`, or the font installed),
+  and otherwise the bundled League Gothic in `fonts/` (SIL Open Font License, drawn at 125% to read
+  like Nickel Gothic). Nickel Gothic is a paid font: never commit a kit ID or the font itself.
 - **Never give a container an id that matches a view name** (`overview`, `pull`, `latest`,
   `settings` and so on). The browser jumps to it on load and the header covers it. Containers use
   `c-*` ids.

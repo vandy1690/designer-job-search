@@ -1,4 +1,6 @@
-# Site Analytics
+# Designer Job Search
+
+By Steven Design Services.
 
 A private dashboard for job seekers who send employers to their own website. It reads your
 Google Analytics, matches each visit to the jobs you applied to, and estimates who looked and
@@ -65,16 +67,18 @@ Also in the app:
 
 ## Install
 
+The repository is private for now. To install it, you need an invitation to it on GitHub.
+
 ### The easy way: ask Claude
 
 If you use [Claude Code](https://claude.com/claude-code), paste this prompt and it does the
 install for you. [INSTALL-WITH-CLAUDE.md](INSTALL-WITH-CLAUDE.md) explains each step.
 
 ```text
-Install the Site Analytics app for me from https://github.com/vandy1690/site-analytics.
+Install the Designer Job Search app for me from https://github.com/vandy1690/designer-job-search.
 
 1. Check that Node.js 20 or later is installed (node -v). If it is missing or older, tell me how to install the LTS version from nodejs.org, and wait for me.
-2. Put the app in a folder named site-analytics in my home folder. Use git clone if git is installed. Otherwise download the ZIP of the main branch and unzip it there.
+2. Put the app in a folder named designer-job-search in my home folder. Use git clone if git is installed. Otherwise download the ZIP of the main branch and unzip it there.
 3. Read README.md and CLAUDE.md in that folder before doing anything else.
 4. Start the app with "node server.mjs" from that folder, and open http://localhost:4340/ in my browser.
 5. Ask me if the app should start on its own when I log in. Only if I say yes, run "scripts/login-item.sh install" (Mac only). If I say no, tell me the command to start it again later.
@@ -84,13 +88,13 @@ Install the Site Analytics app for me from https://github.com/vandy1690/site-ana
 ### By hand
 
 1. Install Node.js 20 or later from [nodejs.org](https://nodejs.org).
-2. Get the app. Either run `git clone https://github.com/vandy1690/site-analytics.git ~/site-analytics`,
+2. Get the app. Either run `git clone https://github.com/vandy1690/designer-job-search.git ~/designer-job-search`,
    or on GitHub click **Code**, then **Download ZIP**, unzip it, and move the folder to your home
-   folder as `site-analytics`.
+   folder as `designer-job-search`.
 3. Open Terminal and run:
 
    ```sh
-   cd ~/site-analytics
+   cd ~/designer-job-search
    node server.mjs
    ```
 
@@ -160,7 +164,14 @@ scripts/login-item.sh install
 ```
 
 `scripts/login-item.sh uninstall` turns that off, and `scripts/login-item.sh status` tells you if
-it is on. It affects only your Mac account. The log is in `~/Library/Logs/site-analytics/`.
+it is on. It affects only your Mac account. The log is in `~/Library/Logs/designer-job-search/`.
+
+## Fonts
+
+Headings use Nickel Gothic when your computer can load it, and League Gothic when it cannot.
+League Gothic is free and comes with the app. Nickel Gothic is a paid typeface, so it is not
+included. If your Adobe Fonts subscription has it, put your kit ID in Settings, Advanced, Adobe
+Fonts kit, and add `localhost` to the kit's domains in Adobe Fonts. The rest of the text is Inter.
 
 ## Your data and privacy
 
@@ -168,8 +179,9 @@ it is on. It affects only your Mac account. The log is in `~/Library/Logs/site-a
   backups in `store/.backups`. Your Google key is in `config/`. Both folders are readable only by
   your Mac account, are never served to the browser, and are left out of git.
 - The app reaches out to the internet for these things only: Google Analytics (read-only), the
-  public job boards of companies on your list, a job posting link you paste, and the fonts the
-  page uses (Adobe Fonts and Google Fonts). There is no tracking and no account with this app.
+  public job boards of companies on your list, a job posting link you paste, the Inter font from
+  Google Fonts, and your Adobe Fonts kit if you set one. There is no tracking and no account with
+  this app.
 - It never sends a message, email or connection request for you.
 - The app never deploys anywhere. Do not put it on a web server: it holds the names of
   recruiters and the jobs you applied to.
@@ -195,13 +207,13 @@ shut the robot out completely, delete its key in Google Cloud or remove it from 
 
 ## Update
 
-With git: `cd ~/site-analytics && git pull`, then restart the app. Without git: download the new
+With git: `cd ~/designer-job-search && git pull`, then restart the app. Without git: download the new
 ZIP, and copy your `store` and `config` folders into the new folder before you start it.
 
 ## Uninstall
 
 Run `scripts/login-item.sh uninstall` if you turned on start at login, then delete the
-`site-analytics` folder. In Google Cloud, delete the robot account, and in Google Analytics,
+`designer-job-search` folder. In Google Cloud, delete the robot account, and in Google Analytics,
 remove it from Property access management.
 
 ## For developers
@@ -219,9 +231,15 @@ in the page.
 | `js/engine.js` | Time zones, places, sources, filters and scoring, shared by server and page |
 | `js/app.js`, `js/store.js`, `index.html`, `css/dash.css` | The page |
 | `sdc.css` | The design system stylesheet (do not edit here) |
+| `fonts/` | League Gothic, the free heading font, with its license |
 | `scripts/demo.mjs` | The demo, with made-up data |
 | `scripts/screenshots.mjs` | Rebuilds `docs/screenshots` from the demo in headless Chrome |
 | `scripts/login-item.sh` | Start at login on a Mac |
 
 `npm run screenshots` needs Google Chrome and Node 22. The screenshots only ever come from the
 demo, so they carry no personal information.
+
+## License
+
+MIT, see [LICENSE](LICENSE). League Gothic is under the SIL Open Font License, see
+[fonts/LEAGUE-GOTHIC-OFL.txt](fonts/LEAGUE-GOTHIC-OFL.txt).
