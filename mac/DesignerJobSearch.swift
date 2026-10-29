@@ -184,7 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
       let i = NSMenuItem(title: t, action: a, keyEquivalent: k); i.keyEquivalentModifierMask = mods; return i
     }
     let about = item("About Designer Job Search", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), "")
-    let site = item("Steven Design Services Website", #selector(openSite), ""); site.target = self
+    let site = item("Steven Design Co. Website", #selector(openSite), ""); site.target = self
     add("Designer Job Search", [about, site, .separator(),
       item("Hide Designer Job Search", #selector(NSApplication.hide(_:)), "h"),
       item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),

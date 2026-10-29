@@ -1,6 +1,6 @@
 # Designer Job Search
 
-By [Steven Design Services](https://stevendesignco.com).
+By [Steven Design Co.](https://stevendesignco.com), a brand of Steven Design Services LLC.
 
 A private dashboard for job seekers who send employers to their own website. It reads your
 Google Analytics, matches each visit to the jobs you applied to, and estimates who looked and
@@ -210,7 +210,7 @@ the first-run setup on an empty install.
 
 ## Use it as a Mac app
 
-To get Designer Job Search in its own window, with the SDS icon in your Dock:
+To get Designer Job Search in its own window, with the SDC icon in your Dock:
 
 ```sh
 npm run app
@@ -315,7 +315,7 @@ in the page.
 | `scripts/screenshots.mjs` | Rebuilds `docs/screenshots` from the demo in headless Chrome |
 | `scripts/login-item.sh` | Start at login on a Mac |
 | `mac/DesignerJobSearch.swift`, `scripts/make-app.mjs` | The Mac app and its build (`npm run app`) |
-| `assets/` | The app icon (SDS mark) and its build (`npm run icon`) |
+| `assets/` | The app icon (SDC mark) and its build (`npm run icon`) |
 | `scripts/a11y.mjs` | Accessibility check, WCAG 2.2 AA with axe-core (`npm run a11y`) |
 | `js/tour.js` | The tour after setup: a spotlight on one control at a time, with a card beside it |
 | `js/terms.js` | The terms of use and license the app shows (`npm run terms` copies them) |

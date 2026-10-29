@@ -3,7 +3,7 @@
 import { loadAll, save, api } from "./store.js";
 import { countsOf, atsOfUrl, companyKey, metroLabel, dayIn } from "./engine.js";
 import { BOARDS, boardOn, linkOn } from "./boards.js";
-import { TERMS, TERMS_VERSION, LICENSE, OWNER, SITE, APP_VERSION } from "./terms.js";
+import { TERMS, TERMS_VERSION, LICENSE, BRAND, OWNER, SITE, APP_VERSION } from "./terms.js";
 import { runTour } from "./tour.js";
 
 const $ = (id) => document.getElementById(id);
@@ -1181,7 +1181,7 @@ function renderSettings() {
 
   const agreed = st.terms && st.terms.acceptedAt ? ` You agreed to the terms of use on ${esc(dot(st.terms.acceptedAt.slice(0, 10)))}.` : "";
   const aboutCard = panel("About", `
-    <p>Designer Job Search ${esc(APP_VERSION)}, made by ${esc(OWNER)}. ${siteLink("stevendesignco.com")}</p>
+    <p>Designer Job Search ${esc(APP_VERSION)}, made by ${esc(BRAND)}, a brand of ${esc(OWNER)}. ${siteLink("stevendesignco.com")}</p>
     <p class="dash-note">Free under the MIT License, with no warranty. Matches are estimates, and job listings come from other websites.${agreed}</p>
     <div class="dash-inline"><button type="button" class="sdc-btn" data-show="terms">Terms of use</button><button type="button" class="sdc-btn" data-show="license">MIT License</button></div>`, "help");
   const box = $("c-settings");

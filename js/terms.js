@@ -2,13 +2,16 @@
 // TERMS.md by `npm run terms`. Change them here, raise TERMS_VERSION, then run that script.
 
 export const APP_VERSION = "1.0.0";
-export const TERMS_VERSION = "2026-10-28";
+export const TERMS_VERSION = "2026-10-29";
+// BRAND is the name people see. OWNER is the legal name: it stays on the copyright, the license and
+// every promise in the terms, because Steven Design Co. is a brand, not a separate company.
+export const BRAND = "Steven Design Co.";
 export const OWNER = "Steven Design Services LLC";
 export const SITE = "https://stevendesignco.com";
 
 export const TERMS = [
   { h: "Who provides this app",
-    p: [`Designer Job Search is made by ${OWNER}, an Illinois company. It is free, and it is offered under the MIT License. You must be 18 or older to use it. By installing or using it, you agree to these terms. If you do not agree, do not use the app.`] },
+    p: [`Designer Job Search is made by ${BRAND}, a brand of ${OWNER}, an Illinois company. It is free, and it is offered under the MIT License. You must be 18 or older to use it. By installing or using it, you agree to these terms. If you do not agree, do not use the app.`] },
   { h: "Not connected to other companies",
     p: ["Designer Job Search is not made by, connected to or endorsed by Google, LinkedIn, Adzuna, or any job board or job site it reads or links to. Their names belong to their owners."] },
   { h: "Estimates, not facts",

@@ -1,12 +1,12 @@
 # Terms of use
 
-Designer Job Search, by [Steven Design Services LLC](https://stevendesignco.com). Version 2026-10-28.
+Designer Job Search, by [Steven Design Co.](https://stevendesignco.com). Version 2026-10-29.
 
 The app shows these same terms on its first setup screen, where you agree to them, and in its footer.
 
 ## Who provides this app
 
-Designer Job Search is made by Steven Design Services LLC, an Illinois company. It is free, and it is offered under the MIT License. You must be 18 or older to use it. By installing or using it, you agree to these terms. If you do not agree, do not use the app.
+Designer Job Search is made by Steven Design Co., a brand of Steven Design Services LLC, an Illinois company. It is free, and it is offered under the MIT License. You must be 18 or older to use it. By installing or using it, you agree to these terms. If you do not agree, do not use the app.
 
 ## Not connected to other companies
 

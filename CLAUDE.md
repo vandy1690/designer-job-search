@@ -19,7 +19,7 @@ call to Google and to job boards.
 ## The Mac app
 
 `npm run app` compiles `mac/DesignerJobSearch.swift` (a WKWebView window, no Electron) into
-`/Applications/Designer Job Search.app`, ad hoc signed, with `assets/AppIcon.icns` (the SDS mark).
+`/Applications/Designer Job Search.app`, ad hoc signed, with `assets/AppIcon.icns` (the SDC mark).
 It is a launcher: Info.plist holds `DJSAppDir` (this folder) and `DJSNode`, and the app runs the
 code here, starting `server.mjs` only if nothing answers on 4340, and stopping only the server it
 started. Only the app's own address shows in its window; every other link opens in the browser.
@@ -114,7 +114,7 @@ committed. Every other screenshot comes from the demo.
   `.sdc-btn`, `.sdc-field`, `.sdc-pager` and so on). Pieces SDC does not have yet are local `dash-*`
   classes in `css/dash.css`, built from SDC tokens only. No raw colors, no outside UI frameworks.
   `sdc.css` is a copy: do not edit it here.
-- **Type and brand.** The brand is set in type ("Designer Job Search, by Steven Design Services",
+- **Type and brand.** The brand is set in type ("Designer Job Search, by Steven Design Co.",
   initials DJS on the collapsed rail); there is no logo file. Headings use Nickel Gothic only when
   this computer can load it (an Adobe Fonts kit ID in `settings.fontKit`, or the font installed),
   and otherwise the bundled League Gothic in `fonts/` (SIL Open Font License, drawn at 125% to read

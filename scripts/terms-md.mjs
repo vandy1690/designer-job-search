@@ -3,13 +3,13 @@
 import { writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TERMS, TERMS_VERSION, LICENSE, OWNER, SITE } from "../js/terms.js";
+import { TERMS, TERMS_VERSION, LICENSE, BRAND, SITE } from "../js/terms.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const md = [
   "# Terms of use",
   "",
-  `Designer Job Search, by [${OWNER}](${SITE}). Version ${TERMS_VERSION}.`,
+  `Designer Job Search, by [${BRAND}](${SITE}). Version ${TERMS_VERSION}.`,
   "",
   "The app shows these same terms on its first setup screen, where you agree to them, and in its footer.",
   "",
