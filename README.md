@@ -66,6 +66,29 @@ Also in the app:
 </tr>
 </table>
 
+## What to enter
+
+The odds are only as good as what you log. The Add application and Log a contact windows say the
+same thing at the bottom.
+
+**Applications.** Only company, role and date are required. These make the odds sharper:
+
+- **Job link or applicant system.** A visit from inside Greenhouse, Lever, Ashby or Workday is high
+  odds when it is your only application in that system.
+- **Time applied.** A visit within a day of applying, from a place that fits, is medium odds.
+- **Locations.** Most high odds need the reader's place to fit the job.
+
+**Contacts.** Only when and company are required. These make the odds sharper:
+
+- **The hour.** A visit within two hours of a contact can be high odds. A date with no time can only
+  reach medium.
+- **Person.** Without a name, a message counts like an automatic email. Calls, interviews and
+  referrals count either way.
+- **Kind.** When they write, email, call, interview you or view your profile, a visit within two
+  hours is medium odds even with no place. Your own messages, rejections and automatic replies need
+  a place that fits.
+- **Places.** High odds need the reader's place to fit this person, their office or the job.
+
 ## What you need
 
 - A Mac. The app is built and tested on macOS. It should run on Windows and Linux too, but the
@@ -130,6 +153,10 @@ itself up:
 The last screen sums up what is set and what is left. Answers save as you go, so you can stop and
 pick up later, even in a private or Incognito window. Everything can be changed later in Settings.
 
+Then a short tour opens the pages you will use and points at what to do on each: Application
+links, Add application, Log a contact, Application pull, Data health and Refresh. Skip it any time,
+or take it again from Settings, Take a tour.
+
 <table>
 <tr>
 <td><img src="docs/screenshots/setup-1-welcome.png" alt="The welcome screen"></td>
@@ -145,7 +172,7 @@ pick up later, even in a private or Incognito window. Everything can be changed 
 </tr>
 <tr>
 <td><img src="docs/screenshots/setup-7-done.png" alt="The summary at the end of setup"></td>
-<td></td>
+<td><img src="docs/screenshots/tour.png" alt="The tour after setup, pointing at Add application"></td>
 </tr>
 </table>
 
@@ -290,6 +317,7 @@ in the page.
 | `mac/DesignerJobSearch.swift`, `scripts/make-app.mjs` | The Mac app and its build (`npm run app`) |
 | `assets/` | The app icon (SDS mark) and its build (`npm run icon`) |
 | `scripts/a11y.mjs` | Accessibility check, WCAG 2.2 AA with axe-core (`npm run a11y`) |
+| `js/tour.js` | The tour after setup: a spotlight on one control at a time, with a card beside it |
 | `js/terms.js` | The terms of use and license the app shows (`npm run terms` copies them) |
 
 `npm run screenshots` needs Google Chrome and Node 22. It rebuilds the demo screenshots: Reach out,

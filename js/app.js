@@ -4,6 +4,7 @@ import { loadAll, save, api } from "./store.js";
 import { countsOf, atsOfUrl, companyKey, metroLabel, dayIn } from "./engine.js";
 import { BOARDS, boardOn, linkOn } from "./boards.js";
 import { TERMS, TERMS_VERSION, LICENSE, OWNER, SITE, APP_VERSION } from "./terms.js";
+import { runTour } from "./tour.js";
 
 const $ = (id) => document.getElementById(id);
 const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -135,6 +136,29 @@ function show(focus) {
   markCurrent();
   window.scrollTo(0, 0);
   if (focus) $("view-title").focus();
+}
+
+/* ---------- The tour ---------- */
+// Runs once when setup ends (settings.tour.pending), and from Settings, Take a tour. Each step opens
+// a page and spotlights the control to use there.
+const TOUR = () => [
+  { view: "leads", target: '#nav-jobs a[href="#leads"]', where: "In the sidebar", title: "Application links", text: "Start here. Jobs that fit what you told the app, best match first. Each card has Apply and Reach out." },
+  { view: "applications", target: "#app-add", where: "On Applications", title: "Add application", text: "When you apply, add it here. Paste the job link and the details fill in. The link and the time make the odds sharper." },
+  { view: "contacts", target: "#touch-add", where: "On Contacts", title: "Log a contact", text: "Log every call, message and email, with the hour. That is what ties a visit to a person." },
+  { view: "pull", target: '#nav-main a[href="#pull"]', where: "In the sidebar", title: "Application pull", text: "Who read your work, matched to your applications. A number here means new reads." },
+  { view: "health", target: '#nav-main a[href="#health"]', where: "In the sidebar", title: "Data health", text: "A number here means something in Google Analytics needs a fix. Each one links to the fix." },
+  { view: "overview", target: "#refresh", where: "Top right", title: "Refresh", text: `New visits come in every ${S.settings.autoPullHours || 6} hours while the app runs. Refresh checks now.` }
+];
+function startTour() {
+  runTour(TOUR(), {
+    go: (view) => { if (currentView() !== view) location.hash = `#${view}`; },
+    onEnd: async (how) => {
+      S.settings.tour = { pending: false, [how === "done" ? "doneAt" : "skippedAt"]: new Date().toISOString() };
+      if (currentView() !== "overview") location.hash = "#overview";
+      $("view-title").focus();
+      try { await save("settings", S.settings); } catch (e) { /* asked again next time; harmless */ }
+    }
+  });
 }
 
 /* ---------- Sidebar collapse and theme ---------- */
@@ -764,6 +788,21 @@ const slugify = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 const uniqueId = (base, list) => { let id = base || "item", n = 2; while (list.some((x) => x.id === id)) id = `${base}-${n++}`; return id; };
 const splitList = (s) => String(s || "").split(/[;\n]/).map((x) => x.trim()).filter(Boolean);
 
+// What to fill in for sharper odds, at the bottom of the Add application and Log a contact windows.
+// Each point matches a rule in scoreReader (js/engine.js); change the rule, change the words.
+const oddsTips = (lead, items) => `<div><p class="dash-note">${lead}</p><ul class="dash-list dash-note" style="margin-top: var(--sdc-space-xs)">${items.map(([b, t]) => `<li><strong>${b}</strong> ${t}</li>`).join("")}</ul></div>`;
+const APP_TIPS = oddsTips("Only company, role and date are required. These make the odds sharper:", [
+  ["Job link or applicant system.", "A visit from inside Greenhouse, Lever, Ashby or Workday is high odds when it is your only application in that system."],
+  ["Time applied.", "A visit within a day of applying, from a place that fits, is medium odds."],
+  ["Locations.", "Most high odds need the reader's place to fit the job."]
+]);
+const TOUCH_TIPS = oddsTips("Only when and company are required. These make the odds sharper:", [
+  ["The hour.", "A visit within two hours of a contact can be high odds. A date with no time can only reach medium."],
+  ["Person.", "Without a name, a message counts like an automatic email. Calls, interviews and referrals count either way."],
+  ["Kind.", "When they write, email, call, interview you or view your profile, a visit within two hours is medium odds even with no place. Your own messages, rejections and automatic replies need a place that fits."],
+  ["Places.", "High odds need the reader's place to fit this person, their office or the job."]
+]);
+
 function editApp(id, prefill = {}) {
   const now = localNow();
   const a = S.applications.find((x) => x.id === id) || { company: "", role: "", req: "", submitted: now.date, submittedTime: now.time, jobUrl: "", ats: "", places: [], status: "submitted", notes: "", ...prefill };
@@ -786,7 +825,7 @@ function editApp(id, prefill = {}) {
       ${field("f-places", "Locations", input("f-places", (a.places || []).join("; "), "text", 'placeholder="City, ST; Remote"'))}
       ${field("f-notes", "Notes", textarea("f-notes", a.notes), { span: true })}
     </div>
-    <p class="dash-note">Only company, role and date are required. The time and locations make the odds sharper, because the app matches visits by hour and place.</p>`,
+    ${APP_TIPS}`,
     onOpen: (form) => {
       const status = $("f-fill-status");
       const set = (fid, v) => { const el = $(fid); if (el && v && !el.value.trim()) { el.value = v; return true; } return false; };
@@ -892,7 +931,8 @@ function editTouch(id, prefill = {}) {
       ${field("t-app", "Application", select("t-app", t.applicationId || "", apps), { span: true })}
       ${field("t-places", "Places", input("t-places", (t.places || []).join("; ")), { hint: "Where this person or office is, separated by semicolons." })}
       ${field("t-notes", "Notes", textarea("t-notes", t.notes), { span: true })}
-    </div>`,
+    </div>
+    ${TOUCH_TIPS}`,
     onDelete: id ? async () => { S.touches = S.touches.filter((x) => x.id !== id); await save("touches", S.touches); renderAll(); } : null,
     onSubmit: async (fd) => {
       const errors = {};
@@ -1145,7 +1185,8 @@ function renderSettings() {
     <p class="dash-note">Free under the MIT License, with no warranty. Matches are estimates, and job listings come from other websites.${agreed}</p>
     <div class="dash-inline"><button type="button" class="sdc-btn" data-show="terms">Terms of use</button><button type="button" class="sdc-btn" data-show="license">MIT License</button></div>`, "help");
   const box = $("c-settings");
-  box.innerHTML = `<div id="set-google">${googleCard}</div><div id="set-websites">${sitesCard}</div><div id="set-pulls">${pullCard}</div><div id="set-leads">${leadsCard}</div><div id="set-boards"></div><div id="set-advanced">${advancedCard}</div><div id="set-about">${aboutCard}</div>`;
+  const tourLink = `<p class="dash-note"><button type="button" class="dash-linkbtn" data-tour-start>Take a tour</button>: six steps through the pages you will use most.</p>`;
+  box.innerHTML = `${tourLink}<div id="set-google">${googleCard}</div><div id="set-websites">${sitesCard}</div><div id="set-pulls">${pullCard}</div><div id="set-leads">${leadsCard}</div><div id="set-boards"></div><div id="set-advanced">${advancedCard}</div><div id="set-about">${aboutCard}</div>`;
 
   bindGoogleSetup(box, renderSettings, () => { renderAll(); location.hash = "#settings?google=connected"; });
   drawBoards($("set-boards"), (inner) => panel("Job boards", `<p class="dash-note">Where Application links looks for jobs that fit you, once a day. Turn on the boards you want.</p>${inner}`, "briefcase"));
@@ -1679,6 +1720,7 @@ function welcomeSteps() {
       go: async () => {
         S.settings.onboarded = true;
         S.settings.setup.at = "done";
+        S.settings.tour = { pending: true };
         await save("settings", S.settings);
         welcomeNote = ""; welcomeLinks = "";
         document.body.classList.remove("is-welcome");
@@ -1898,6 +1940,7 @@ async function start() {
       } else finish();
       return;
     }
+    if (e.target.closest("[data-tour-start]")) return startTour();
     const m = e.target.closest("[data-edit-match]"); if (m) return editMatch(m.dataset.editMatch);
     const a = e.target.closest("[data-edit-app]"); if (a) return editApp(a.dataset.editApp);
     const t = e.target.closest("[data-edit-touch]"); if (t) return editTouch(t.dataset.editTouch);
@@ -1907,6 +1950,8 @@ async function start() {
   $("touch-add").onclick = () => editTouch(null);
   $("app-search").oninput = () => { paging.apps = 0; renderApps(); };
   $("touch-search").oninput = () => { paging.touches = 0; renderTouches(); };
+
+  if (S.settings.tour && S.settings.tour.pending) setTimeout(startTour, 300);
 
   // Pick up automatic pulls while the page is open.
   setInterval(async () => {

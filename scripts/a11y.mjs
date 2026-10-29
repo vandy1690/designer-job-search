@@ -70,6 +70,15 @@ async function main() {
     console.log(`dialog ${name}: ${await check(`dialog ${name}`)} problems`);
     await js(`document.getElementById("dialog").close(); true`);
   }
+  // The tour, in both themes: a full-window dialog over a page it makes inert.
+  for (const t of ["light", "dark"]) {
+    await theme(t);
+    await js(`location.hash = "#settings"; true`); await sleep(400);
+    await js(`document.querySelector("[data-tour-start]").click(); true`); await sleep(700);
+    console.log(`tour (${t}): ${await check(`tour ${t}`)} problems`);
+    await js(`document.querySelector(".dash-tour").dispatchEvent(new Event("cancel", { cancelable: true })); true`); await sleep(300);
+  }
+  await theme("light");
   // The setup questions, on a fresh install.
   await open(`http://localhost:${EMPTY}/`);
   const next = () => js(`document.getElementById("w-next").click(); true`).then(() => sleep(600));

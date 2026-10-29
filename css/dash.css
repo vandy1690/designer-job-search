@@ -493,3 +493,28 @@ body.is-welcome .dash-side, body.is-welcome .dash-pull { display: none; }
 /* Links inside sentences are underlined, so color is never the only cue (WCAG 1.4.1). Button-styled
    links keep their own look. */
 :is(p, li, .dash-note) a:not(.sdc-btn):not(.dash-rowbtn):not(.dash-fix):not(.sdc-card__link):not(.dash-lead__title):not(.dash-jd) { text-decoration: underline; text-underline-offset: 0.15em; }
+
+/* The tour (dash-tour, a local piece, js/tour.js): a full-window modal dialog holding a spotlight
+   and a card. The spotlight's huge spread shadow is the dim layer, so the target shows through. */
+.dash-tour {
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; background: transparent; overflow: hidden; color: var(--sdc-text);
+}
+.dash-tour::backdrop { background: transparent; }
+.dash-tour:has(.dash-tour__spot[hidden]) { background: var(--sdc-scrim); }
+.dash-tour__spot {
+  position: absolute; border-radius: var(--sdc-radius-sm); pointer-events: none;
+  box-shadow: 0 0 0 100vmax var(--sdc-scrim); outline: 3px solid var(--sdc-focus-ring);
+}
+.dash-tour__card {
+  position: absolute; width: min(360px, calc(100vw - 2 * var(--sdc-space-md)));
+  display: grid; gap: var(--sdc-space-xs); padding: var(--sdc-space-md);
+  border-radius: var(--sdc-radius); background: var(--sdc-bg); box-shadow: var(--sdc-shadow-modal);
+}
+.dash-tour__card h2, .dash-tour__text, .dash-tour__count { margin: 0; }
+.dash-tour__actions { display: flex; align-items: center; gap: var(--sdc-space-xs); margin-top: var(--sdc-space-xs); }
+.dash-tour__actions .dash-toolbar__grow { flex: 1; }
+.dash-tour__actions [hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .dash-tour__spot, .dash-tour__card { transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease; }
+}

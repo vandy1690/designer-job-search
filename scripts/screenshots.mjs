@@ -85,6 +85,11 @@ async function main() {
   await js(`document.getElementById("dialog").close(); true`);
   await view("#health"); await shot("data-health");
   await view("#settings?go=boards"); await sleep(300); await shot("job-boards", 1400, "#set-boards");
+  // The tour, on its second step (Add application), from Settings, About.
+  await view("#settings"); await js(`document.querySelector("[data-tour-start]").click(); true`); await sleep(900);
+  await js(`document.querySelector('[data-tour="next"]').click(); true`); await sleep(900);
+  await shot("tour");
+  await js(`document.querySelector(".dash-tour").dispatchEvent(new Event("cancel", { cancelable: true })); true`); await sleep(300);
   await view("#overview");
   await js(`localStorage.setItem("dash-theme", "dark"); true`);
   await reload();
