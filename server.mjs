@@ -10,6 +10,7 @@ import { createGoogle } from "./lib/google.mjs";
 import { createPuller } from "./lib/pull.mjs";
 import { readJob } from "./lib/job.mjs";
 import { checkLeads } from "./lib/leads.mjs";
+import { testBoard, adzunaWorks } from "./lib/feeds.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 // SA_STORE and SA_CONFIG move the data folders; SA_DEMO=1 runs on made-up data with Google and
@@ -30,7 +31,7 @@ const TYPES = {
 const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
 // Only these files are ever served, matched exactly and case-sensitively. macOS ignores case in
 // file names, so a deny list is not enough: /STORE/... would otherwise reach ./store.
-const PUBLIC = /^(index\.html|sdc\.css|css\/[a-z0-9-]+\.css|js\/[a-z0-9-]+\.js|fonts\/[a-z0-9-]+\.woff2)$/;
+const PUBLIC = /^(index\.html|sdc\.css|css\/[a-z0-9-]+\.css|js\/[a-z0-9-]+\.js|fonts\/[a-z0-9-]+\.woff2|assets\/(icon\.svg|icon-180\.png))$/;
 // Sent with every response.
 const SECURITY_HEADERS = {
   "Content-Security-Policy": [
@@ -119,14 +120,19 @@ function apiAllowed(req) {
   return true;
 }
 
-// Warm leads: read every watched job board and keep the result. One check at a time.
+// Application links: read every watched job board and keep the result. One check at a time.
 let leadsRunning = null;
+// Keys for job boards that need one (Adzuna), kept beside the Google key and never sent to the page.
+const BOARD_KEYS = join(CONFIG, "boards.json");
+async function boardKeys() { try { return JSON.parse(await readFile(BOARD_KEYS, "utf8")); } catch { return {}; } }
+const keyState = (k) => ({ adzuna: k.adzuna ? { saved: true, country: k.adzuna.country || "us" } : { saved: false } });
+
 async function refreshLeads() {
   if (leadsRunning) return leadsRunning;
   leadsRunning = (async () => {
     const read = async (n, d) => { try { return JSON.parse(await readFile(join(STORE, `${n}.json`), "utf8")); } catch { return d; } };
     const [apps, touches, settings, previous] = await Promise.all([read("applications", []), read("touches", []), read("settings", {}), read("leads", null)]);
-    const fresh = await checkLeads(apps, touches, settings, previous);
+    const fresh = await checkLeads(apps, touches, settings, previous, await boardKeys());
     // Keep jobs you hid, even if a later check happens before you look again.
     const latest = await read("leads", null);
     fresh.hidden = (latest && latest.hidden) || fresh.hidden;
@@ -165,6 +171,8 @@ async function api(req, res, path) {
     }
     if (path === "/api/pull" || path === "/api/leads/refresh" || path === "/api/google/check") return send(res, 409, { error: "This is the demo, so it does not read Google Analytics or job boards." });
     if (path === "/api/job") return send(res, 409, { error: "This is the demo, so it does not read job postings." });
+    if (path === "/api/boards/keys" && req.method === "GET") return send(res, 200, keyState({}));
+    if (path.startsWith("/api/boards/")) return send(res, 409, { error: "This is the demo, so it does not check job boards." });
   }
   if (path === "/api/pull" && req.method === "POST") {
     try {
@@ -177,6 +185,26 @@ async function api(req, res, path) {
   if (path === "/api/leads/refresh" && req.method === "POST") {
     try { const r = await refreshLeads(); return send(res, 200, { ok: true, checkedAt: r.checkedAt, jobs: r.jobs.length, errors: r.errors.length }); }
     catch (err) { return send(res, 502, { error: err.message }); }
+  }
+  if (path === "/api/boards/test" && req.method === "POST") {
+    try { return send(res, 200, await testBoard((await jsonBody(req)).url)); }
+    catch (err) { return send(res, err.status || 400, { error: err.message }); }
+  }
+  if (path === "/api/boards/keys" && req.method === "GET") return send(res, 200, keyState(await boardKeys()));
+  if (path === "/api/boards/keys" && req.method === "PUT") {
+    try {
+      const b = await jsonBody(req);
+      if (b.board !== "adzuna") return send(res, 400, { error: "Only Adzuna takes a key." });
+      const keys = await boardKeys();
+      const appId = String(b.appId || "").trim(), appKey = String(b.appKey || "").trim();
+      const country = /^[a-z]{2}$/.test(b.country || "") ? b.country : "us";
+      if (!appId && !appKey) { delete keys.adzuna; await writeJson(BOARD_KEYS, keys); return send(res, 200, keyState(keys)); }
+      if (!/^[A-Za-z0-9]{4,64}$/.test(appId) || !/^[A-Za-z0-9]{8,64}$/.test(appKey)) return send(res, 400, { error: "Paste the app ID and app key exactly as Adzuna shows them: letters and numbers only." });
+      if (!(await adzunaWorks({ appId, appKey, country }))) return send(res, 400, { error: "Adzuna did not accept that app ID and key. Check both on developer.adzuna.com." });
+      keys.adzuna = { appId, appKey, country };
+      await writeJson(BOARD_KEYS, keys);
+      return send(res, 200, keyState(keys));
+    } catch (err) { return send(res, err.status || 400, { error: err.message }); }
   }
   if (path === "/api/job" && req.method === "POST") {
     try { return send(res, 200, await readJob((await jsonBody(req)).url)); }
@@ -248,11 +276,11 @@ async function handle(req, res) {
 // than the "Pull automatically every" setting and Google is connected.
 async function autoPull() {
   if (DEMO) return;
-  // Job boards change slowly: check warm leads once a day, whether or not Google is connected.
+  // Job boards change slowly: check application links once a day, whether or not Google is connected.
   try {
     let leads = null; try { leads = JSON.parse(await readFile(join(STORE, "leads.json"), "utf8")); } catch { /* first check */ }
-    if (!leads || Date.now() - Date.parse(leads.checkedAt) > 24 * 3600 * 1000) { const r = await refreshLeads(); console.log(`Warm leads checked: ${r.jobs.length} design jobs at ${r.companies} companies.`); }
-  } catch (err) { console.error("Warm leads check failed:", err.message); }
+    if (!leads || Date.now() - Date.parse(leads.checkedAt) > 24 * 3600 * 1000) { const r = await refreshLeads(); console.log(`Application links checked: ${r.jobs.length} design jobs at ${r.companies} companies.`); }
+  } catch (err) { console.error("Application links check failed:", err.message); }
   try {
     const s = await google.status();
     if (!s.connected || puller.isRunning() || !(await puller.due())) return;

@@ -11,3 +11,5 @@ scripts/migrate-v1.mjs
 *.log
 *.tmp
 node_modules/
+# Built Mac app (npm run app -- --here)
+dist/

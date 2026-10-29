@@ -15,6 +15,22 @@ applied to, and finds open jobs with someone to reach out to. Read README.md fir
 `PORT`, `SA_STORE` and `SA_CONFIG` move the port and the data folders. `SA_DEMO=1` turns off every
 call to Google and to job boards.
 
+## The Mac app
+
+`npm run app` compiles `mac/DesignerJobSearch.swift` (a WKWebView window, no Electron) into
+`/Applications/Designer Job Search.app`, ad hoc signed, with `assets/AppIcon.icns` (the SDS mark).
+It is a launcher: Info.plist holds `DJSAppDir` (this folder) and `DJSNode`, and the app runs the
+code here, starting `server.mjs` only if nothing answers on 4340, and stopping only the server it
+started. Only the app's own address shows in its window; every other link opens in the browser.
+If this folder is under Documents, macOS asks once for folder access and the server waits on it.
+`npm run icon` rebuilds the icon from `assets/icon.svg` (needs Chrome).
+
+## Accessibility
+
+`npm run a11y` runs axe-core (WCAG 2.2 A and AA) on every page, dialog and setup question, in both
+themes, on demo data. It reads axe from `AXE`, defaulting to the maintainer's portfolio copy. Keep
+it at zero. Dialogs close on Escape and on a background click; motion respects reduced motion.
+
 ## Helping someone install it
 
 Follow the steps in INSTALL-WITH-CLAUDE.md. Check `node -v` (20 or later), get the code, start
@@ -24,6 +40,45 @@ The app's own first-run screens and Settings handle the rest.
 Never do the Google setup for the user: do not create Google Cloud projects, service accounts or
 keys, do not sign in to Google, and do not paste keys anywhere. Point them to Settings, Connect
 Google Analytics, which walks through it.
+
+## First run
+
+A fresh install shows the setup questions (`welcomeSteps()` in `js/app.js`), one per screen. Each
+answer saves to `settings` as you go (`settings.setup.at` is the current question, and
+`settings.setup.google` the Google steps done), so a closed or Incognito window resumes. The last
+screen sets `settings.onboarded` to true. The Google steps are shared with Settings through
+`bindGoogleSetup()`.
+
+## The legal line (Steve, 2026-10-27: "Do not create bypasses to any page I can get legally in trouble for bypassing")
+
+- Never build a way around a block: no captcha solving, no getting past robot checks, login
+  walls, rate limits, 401, 403 or 429, no rotating addresses, no posing as a browser.
+- Every automatic read goes through `lib/net.mjs`: it names the app (`USER_AGENT`), honors
+  robots.txt (RFC 9309), and stops at blocks. Do not add a `fetch` to a website anywhere else.
+  The only robots.txt exception is an API used with the user's own key under its terms (Adzuna).
+- Sites that do not let apps read them get a search link the person opens in their own browser,
+  nothing more. Never automate LinkedIn, Indeed or Glassdoor.
+- Credit the job sites that ask for it ("via" on each card).
+- The terms of use live in `js/terms.js`; `npm run terms` copies them to TERMS.md and LICENSE.
+  The first setup screen asks the person to agree, and the footer links to them on every page.
+
+## Job boards
+
+`js/boards.js` lists the boards the app knows and what it can do with each: `ok` (reads it on its
+own), `warn` (needs something from the user, like Adzuna's free key), or `error` (the site does not
+let other apps read its listings: LinkedIn, Indeed, Glassdoor, Wellfound, Built In). Each was
+checked by hand on 2026-10-27; when a site changes, change its line there.
+
+- Never scrape a site marked `error`, and never add a workaround for one. Say it cannot be checked.
+  SmartRecruiters is left out of company boards because its API's robots.txt disallows apps.
+  What it can have is a `search` link (built from the user's titles and places) that the person
+  opens and reads themselves; its switch turns that link on Application links on or off.
+- Readers live in `lib/feeds.mjs`. Remote OK and Jobicy ask to be credited, so every job from a job
+  site carries `source`, and its card says "via" that site. Keep that.
+- Links people add go through `getPublic()` in `lib/job.mjs` (https only, no private addresses,
+  each redirect checked). `testBoard()` decides the light when a board is added.
+- The Adzuna key is kept in `config/boards.json` and never sent to the page; the page only learns
+  whether one is saved.
 
 ## Private data: never commit, and touch only when asked
 

@@ -1,6 +1,6 @@
 # Designer Job Search
 
-By Steven Design Services.
+By [Steven Design Services](https://stevendesignco.com).
 
 A private dashboard for job seekers who send employers to their own website. It reads your
 Google Analytics, matches each visit to the jobs you applied to, and estimates who looked and
@@ -22,12 +22,21 @@ a person or a company.
 
 ![Application pull: a table of reads with odds, time, likely reader, application, source, place and pages read](docs/screenshots/application-pull.png)
 
-**Warm leads,** under Job opening matches. The app checks the public job boards of companies you
-have applied to (Greenhouse, Lever, Ashby, Workday and SmartRecruiters) once a day. It keeps the
-jobs whose title, seniority, location and pay fit what you asked for, best match first, and shows
-who you know there.
+**Application links,** under Job opening matches. Once a day the app checks the job boards you turn on:
+the career pages of companies you applied to, and design job sites like Dribbble Jobs and We Work
+Remotely. It keeps the jobs whose title, seniority, location and pay fit what you asked for, best
+match first, and shows who you know there.
 
-![Warm leads: job cards with match strength, pay, why it fits, and the person to reach out to](docs/screenshots/job-matches.png)
+![Application links: job cards with match strength, pay, why it fits, and the person to reach out to](docs/screenshots/job-matches.png)
+
+**Job boards** is where you choose which boards to check. Each one has a light: green means the
+app can check it, amber means it needs something from you (a free key, or a better link), and red
+means the app cannot check that website, with the reason. LinkedIn, Indeed and Glassdoor are red,
+because they block apps, but turning one on puts a search link on Application links. The link
+opens that site's search with your job titles already filled in, so you can check it yourself. You can add any board by its link, and
+the app checks it right away.
+
+![Job boards: the common boards with on and off switches and a status light for each](docs/screenshots/job-boards.png)
 
 **Reach out** finds people at the company on LinkedIn and writes a short note from your own
 template. You copy the note and send it yourself. The app never sends anything for you.
@@ -104,29 +113,46 @@ Leave Terminal open while you use the app. To stop it, press Control C in Termin
 
 ## First run
 
-The first time it opens, the app asks five things: your name and city, the jobs you want, your
-websites, and then it hands you to the Google Analytics setup. Everything can be changed later in
-Settings.
+The first time it opens, the app asks the questions it needs, one screen at a time, and sets
+itself up:
+
+1. Your first name, and one line about your work for outreach notes.
+2. Your city and time zone. Your own visits from your city are left out.
+3. The job titles and seniority you are looking for.
+4. Where you would work, and the lowest pay you would take.
+5. Which job boards to check.
+6. The websites you send employers to.
+7. Whether Google Analytics is on them, with help to add it or check.
+8. Connecting Google Analytics, step by step.
+9. Which Google Analytics property belongs to each website.
+10. The jobs you have already applied to: paste job links, paste a CSV, or skip.
+
+The last screen sums up what is set and what is left. Answers save as you go, so you can stop and
+pick up later, even in a private or Incognito window. Everything can be changed later in Settings.
 
 <table>
 <tr>
-<td><img src="docs/screenshots/setup-1-welcome.png" alt="Step 1: what the app does"></td>
-<td><img src="docs/screenshots/setup-2-about-you.png" alt="Step 2: your name, city, time zone and one line about your work"></td>
+<td><img src="docs/screenshots/setup-1-welcome.png" alt="The welcome screen"></td>
+<td><img src="docs/screenshots/setup-2-about-you.png" alt="Your first name and one line about your work"></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/setup-3-jobs.png" alt="Step 3: job titles, seniority, locations and your lowest pay"></td>
-<td><img src="docs/screenshots/setup-4-websites.png" alt="Step 4: your website addresses"></td>
+<td><img src="docs/screenshots/setup-3-jobs.png" alt="The job titles and seniority you want"></td>
+<td><img src="docs/screenshots/setup-4-job-boards.png" alt="Which job boards to check, with a status light for each"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/setup-5-google-analytics.png" alt="Is Google Analytics on your websites, with help to check"></td>
+<td><img src="docs/screenshots/setup-6-connect-google.png" alt="Connecting Google Analytics in seven steps"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/setup-7-done.png" alt="The summary at the end of setup"></td>
+<td></td>
 </tr>
 </table>
 
-Your city is used to leave your own visits out. Your name and your one line about your work go
-into the outreach notes.
-
 ## Connect Google Analytics
 
-Settings walks you through seven steps, one at a time, with a button that opens each Google page.
-
-![The seven step Google Analytics setup in Settings](docs/screenshots/settings-connect-google.png)
+Setup walks you through seven steps, one at a time, with a button that opens each Google page. If
+you skip it during setup, the same steps are in Settings.
 
 In short, you make a read-only "robot" login in Google Cloud (Google calls it a service account),
 download its key, give the key to the app, and add the robot's email address as a **Viewer** in
@@ -136,7 +162,8 @@ After that it runs on its own:
 
 - The first pull starts right after the connection check.
 - The app pulls again every 6 hours while it runs, and **Refresh** in the top bar pulls now.
-- Job boards are checked once a day, and **Check now** on Warm leads checks now.
+- Job boards are checked once a day, and **Check now** on Application links checks now. Choose them in
+  Settings, Job boards.
 
 Then add the jobs you applied to under **Applications**, and the calls, messages and referrals
 under **Contacts**. The more you log, the better the odds get. Applications can also be
@@ -153,6 +180,26 @@ npm run demo
 Then open [http://localhost:4341/](http://localhost:4341/). The demo uses made-up data, never
 reads Google or any job board, and never touches your own data. Run `npm run demo:fresh` to see
 the first-run setup on an empty install.
+
+## Use it as a Mac app
+
+To get Designer Job Search in its own window, with the SDS icon in your Dock:
+
+```sh
+npm run app
+```
+
+This builds `Designer Job Search.app` into Applications. It needs Apple's free developer tools
+(if they are missing, run `xcode-select --install` first). Open the app from Applications,
+Launchpad or Spotlight, and drag it to the Dock to keep it there.
+
+- The app starts the local server for you and shows the dashboard. Job postings, LinkedIn and
+  Google open in your normal browser.
+- Closing the window keeps the app running, so automatic checks keep going. Quit it from the menu.
+- The app runs the code in your `designer-job-search` folder, so updates need no rebuild. Rebuild
+  only if you move that folder.
+- If the folder is inside Documents, Desktop or Downloads, macOS asks once to let the app use
+  files there. Click Allow.
 
 ## Keep it running (Mac)
 
@@ -179,10 +226,13 @@ Fonts kit, and add `localhost` to the kit's domains in Adobe Fonts. The rest of 
   backups in `store/.backups`. Your Google key is in `config/`. Both folders are readable only by
   your Mac account, are never served to the browser, and are left out of git.
 - The app reaches out to the internet for these things only: Google Analytics (read-only), the
-  public job boards of companies on your list, a job posting link you paste, the Inter font from
+  job boards you turn on, a job posting or job board link you paste, the Inter font from
   Google Fonts, and your Adobe Fonts kit if you set one. There is no tracking and no account with
   this app.
 - It never sends a message, email or connection request for you.
+- It reads only what websites allow apps to read. It says who it is, follows each site's
+  robots.txt, and stops at any block (a captcha, a robot check, a login wall). Sites that block
+  apps, like LinkedIn, Indeed and Glassdoor, get a search link you open yourself instead.
 - The app never deploys anywhere. Do not put it on a web server: it holds the names of
   recruiters and the jobs you applied to.
 
@@ -226,7 +276,9 @@ in the page.
 | `server.mjs` | Serves the page, stores data, holds the Google connection, runs the schedule |
 | `lib/google.mjs` | Google sign-in (robot key or OAuth) and the Analytics API calls |
 | `lib/pull.mjs` | One pull from Google Analytics, end to end |
-| `lib/leads.mjs` | Reads the public job boards for Warm leads |
+| `lib/leads.mjs` | The daily job check for Application links, and company job boards |
+| `lib/feeds.mjs` | Job sites, feeds and boards you add; checks a board link |
+| `js/boards.js` | The list of job boards and whether the app can check each one |
 | `lib/job.mjs` | Reads one job posting for Add application |
 | `js/engine.js` | Time zones, places, sources, filters and scoring, shared by server and page |
 | `js/app.js`, `js/store.js`, `index.html`, `css/dash.css` | The page |
@@ -235,9 +287,20 @@ in the page.
 | `scripts/demo.mjs` | The demo, with made-up data |
 | `scripts/screenshots.mjs` | Rebuilds `docs/screenshots` from the demo in headless Chrome |
 | `scripts/login-item.sh` | Start at login on a Mac |
+| `mac/DesignerJobSearch.swift`, `scripts/make-app.mjs` | The Mac app and its build (`npm run app`) |
+| `assets/` | The app icon (SDS mark) and its build (`npm run icon`) |
+| `scripts/a11y.mjs` | Accessibility check, WCAG 2.2 AA with axe-core (`npm run a11y`) |
+| `js/terms.js` | The terms of use and license the app shows (`npm run terms` copies them) |
 
 `npm run screenshots` needs Google Chrome and Node 22. The screenshots only ever come from the
 demo, so they carry no personal information.
+
+## Terms of use
+
+Using the app means agreeing to its [terms of use](TERMS.md): the first setup screen asks you to.
+In short, matches are estimates, job listings come from other websites, you decide what you send
+and to whom, and the app comes with no warranty or liability. The app's footer links to the terms
+at any time.
 
 ## License
 

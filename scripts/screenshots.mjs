@@ -43,9 +43,11 @@ async function connect() {
 }
 
 async function main() {
-  run(process.execPath, [join(ROOT, "scripts", "demo.mjs")], { PORT: String(DEMO) });
-  run(process.execPath, [join(ROOT, "scripts", "demo.mjs"), "--empty"], { PORT: String(EMPTY) });
+  // Throwaway data and config folders, so nothing from a real install (a Google key someone
+  // uploaded while testing) can reach a picture.
   const profile = await mkdtemp(join(tmpdir(), "sa-shots-"));
+  run(process.execPath, [join(ROOT, "scripts", "demo.mjs")], { PORT: String(DEMO), SA_STORE: join(profile, "demo-store"), SA_CONFIG: join(profile, "demo-config") });
+  run(process.execPath, [join(ROOT, "scripts", "demo.mjs"), "--empty"], { PORT: String(EMPTY), SA_STORE: join(profile, "empty-store"), SA_CONFIG: join(profile, "empty-config") });
   run(CHROME, ["--headless=new", `--remote-debugging-port=${CDP}`, `--user-data-dir=${profile}`, "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", "--window-size=1440,900", "about:blank"], { TZ: "America/Los_Angeles" });
   await waitFor(`http://localhost:${DEMO}/`);
   await waitFor(`http://localhost:${EMPTY}/`);
@@ -62,9 +64,10 @@ async function main() {
   const open = async (url) => { const loaded = c.event("Page.loadEventFired"); await c.send("Page.navigate", { url }); await loaded; await settle(); };
   const reload = async () => { const loaded = c.event("Page.loadEventFired"); await c.send("Page.reload", {}); await loaded; await settle(); };
   const view = async (hash) => { await js(`location.hash = ${JSON.stringify(hash)}; true`); await sleep(500); };
-  const shot = async (name, height = 900) => {
+  // at: a selector to scroll to the top of the picture, below the sticky top bar.
+  const shot = async (name, height = 900, at = "") => {
     await size(height);
-    await js("window.scrollTo(0, 0); document.activeElement && document.activeElement.blur(); true");
+    await js(`(() => { const el = ${JSON.stringify(at)} && document.querySelector(${JSON.stringify(at)}); window.scrollTo(0, el ? el.getBoundingClientRect().top + window.scrollY - 96 : 0); document.activeElement && document.activeElement.blur(); return true; })()`);
     await sleep(300);
     const { data } = await c.send("Page.captureScreenshot", { format: "png" });
     await writeFile(join(OUT, `${name}.png`), Buffer.from(data, "base64"));
@@ -84,24 +87,32 @@ async function main() {
   await view("#reading"); await shot("reading-and-reach", 1100);
   await view("#health"); await shot("data-health");
   await view("#applications"); await shot("applications");
+  await view("#settings?go=boards"); await sleep(300); await shot("job-boards", 1400, "#set-boards");
   await view("#overview");
   await js(`localStorage.setItem("dash-theme", "dark"); true`);
   await reload();
   await shot("overview-dark");
   await js(`localStorage.removeItem("dash-theme"); true`);
 
-  // A fresh install: the first-run setup, then the Google step it hands off to.
+  // A fresh install: the setup questions, from the welcome to the summary.
   await open(`http://localhost:${EMPTY}/`);
-  const next = () => js(`document.querySelector("#w-form button[type=submit]").click(); true`).then(() => sleep(400));
+  const next = () => js(`document.getElementById("w-next").click(); true`).then(() => sleep(500));
   const fill = (values) => js(`(${JSON.stringify(values)}).forEach(([id, v]) => { document.getElementById(id).value = v; }); true`);
+  await js(`document.getElementById("w-terms").click(); true`);
   await shot("setup-1-welcome");
   await next();
-  await fill([["w-name", "Alex"], ["w-city", "Portland, Oregon"], ["w-pitch", "I design payments products and the design systems behind them."]]);
+  await fill([["w-name", "Alex"], ["w-pitch", "I design payments products and the design systems behind them."]]);
   await shot("setup-2-about-you");
+  await next(); await fill([["w-city", "Portland, Oregon"]]);
   await next(); await shot("setup-3-jobs");
-  await next(); await fill([["w-sites", "alexrivera.example"]]); await shot("setup-4-websites");
-  await next(); await shot("setup-5-google");
-  await next(); await sleep(600); await shot("settings-connect-google", 1180);
+  await next(); await fill([["w-floor", "160000"]]);
+  await next(); await sleep(300); await shot("setup-4-job-boards", 1180);
+  await next(); await fill([["w-sites", "alexrivera.example"]]);
+  await next(); await js(`document.querySelector('input[name="w-ga"][value="unsure"]').click(); true`); await sleep(200);
+  await shot("setup-5-google-analytics", 1000);
+  await next(); await shot("setup-6-connect-google", 1180);
+  await js(`document.getElementById("w-alt").click(); true`); await sleep(500);
+  await next(); await shot("setup-7-done", 1000);
 
   c.close();
   await rm(profile, { recursive: true, force: true });

@@ -6,15 +6,16 @@
 // domain. The demo never reads Google Analytics or job boards, and your own data in store/ is
 // never touched. Dates are counted back from today, so the demo always looks current.
 import { mkdir, writeFile, rm } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { companyKey } from "../js/engine.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EMPTY = process.argv.includes("--empty");
-const STORE = join(ROOT, "demo", EMPTY ? "empty-store" : "store");
-const CONFIG = join(ROOT, "demo", "config");
+// SA_STORE and SA_CONFIG point the demo somewhere else (the screenshot script uses throwaway folders).
+const STORE = process.env.SA_STORE ? resolve(process.env.SA_STORE) : join(ROOT, "demo", EMPTY ? "empty-store" : "store");
+const CONFIG = process.env.SA_CONFIG ? resolve(process.env.SA_CONFIG) : join(ROOT, "demo", "config");
 const PORT = process.env.PORT || "4341";
 
 /* ---------- Dates, counted back from today ---------- */
@@ -48,6 +49,11 @@ const settings = {
     titles: ["product designer", "design systems"], seniority: ["principal", "staff", "lead", "senior"],
     skip: ["manager", "director", "head of", "vice president", "intern", "junior", "associate"],
     locations: ["remote", "portland"], payFloor: 160000, postedWithinDays: 0, minWarmth: 2, extraBoards: [],
+    boards: {},
+    customBoards: [
+      { id: "my-design-jobs-weekly", name: "Design Jobs Weekly", url: "https://designjobs.example/feed.xml", kind: "feed", feedUrl: "https://designjobs.example/feed.xml", status: "ok", message: "Reads this feed: 24 listings in it now.", on: true },
+      { id: "my-fourth-coffee-careers", name: "Fourth Coffee careers", url: "https://fourthcoffee.example/careers", kind: "none", status: "warn", message: "Needs a feed link. This page has no job feed the app can read. Look on the site for an RSS link or a job alerts feed, and add that link instead.", on: false }
+    ],
     connectNote: CONNECT_NOTE, messageNote: MESSAGE_NOTE
   }
 };
@@ -199,7 +205,7 @@ const J = [
   ["Fabrikam Cloud", "Staff Product Designer, Billing Experience", "ashby", "Remote", 3, [175000, 210000]],
   ["Relecloud", "Senior Product Designer, Design Systems", "ashby", "Remote", 5, [165000, 190000]],
   ["Fourth Coffee", "Senior Product Designer, Mobile Ordering", "greenhouse", "Portland, Oregon", 6, [140000, 155000]],
-  ["Litware Labs", "Staff Product Designer, Developer Tools", "smartrecruiters", "Austin, Texas; Remote", 8, null],
+  ["Litware Labs", "Staff Product Designer, Developer Tools", "ashby", "Austin, Texas; Remote", 8, null],
   ["Adatum", "Lead Product Designer, Risk", "greenhouse", "Remote", 9, [170000, 200000]],
   ["Trey Research", "Principal Product Designer, Analytics", "lever", "Minneapolis, Minnesota; Remote", 12, [190000, 230000]],
   ["Alpine Outfitters", "Senior Product Designer, Checkout", "other", "Portland, Oregon", 14, null],
@@ -216,9 +222,26 @@ const jobs = J.map(([company, title, type, location, ago, pay], i) => ({
   company, companyKey: companyKey(company), boardType: type,
   firstSeen: new Date(NOW - Math.min(ago, i < 3 ? 0.5 : ago) * DAY).toISOString()
 }));
+// Jobs from job sites, credited to the site they came from.
+const SITE_JOBS = [
+  ["Northwind Payments", "Staff Product Designer, Merchant Dashboard", "dribbble", "Dribbble Jobs", "Remote", 1, null],
+  ["Tailspin Toys", "Senior Product Designer, Design Systems", "himalayas", "Himalayas", "Remote, United States", 2, [170000, 195000]],
+  ["Bellows Studio", "Lead Product Designer", "weworkremotely", "We Work Remotely", "Remote, Americas", 4, null]
+];
+for (const [company, title, type, source, location, ago, pay] of SITE_JOBS) {
+  jobs.push({ id: `${type}:${slug(company)}-${slug(title)}`, title, url: `https://${type}.example/jobs/${slug(company)}-${slug(title)}`, location, posted: day(ago), pay: pay ? { min: pay[0], max: pay[1] } : null, company, companyKey: companyKey(company), boardType: type, source, firstSeen: new Date(NOW - ago * DAY).toISOString() });
+}
 // One the demo already applied to, so the page shows that applied jobs are left out.
 jobs.push({ id: "greenhouse:northwind-payments:4471002", title: "Staff Product Designer, Checkout", url: app("Northwind Payments").jobUrl, location: "Seattle, Washington; Remote", posted: day(10), pay: { min: 180000, max: 215000 }, company: "Northwind Payments", companyKey: companyKey("Northwind Payments"), boardType: "greenhouse", firstSeen: new Date(NOW - 10 * DAY).toISOString() });
-const leads = { checkedAt: new Date(NOW - 2 * 3600 * 1000).toISOString(), companies: 14, withoutBoard: [companyKey("Bridgeline Staffing")], jobs, errors: [], hidden: [] };
+const leads = {
+  checkedAt: new Date(NOW - 2 * 3600 * 1000).toISOString(), companies: 14, withoutBoard: [companyKey("Bridgeline Staffing")], jobs, errors: [], hidden: [],
+  sources: [
+    { id: "company", ok: true, jobs: 12, companies: 14, failed: 0 },
+    { id: "dribbble", ok: true, jobs: 9 }, { id: "weworkremotely", ok: true, jobs: 6 }, { id: "remoteok", ok: true, jobs: 4 },
+    { id: "himalayas", ok: true, jobs: 11 }, { id: "jobicy", ok: false, message: "It answered 503." },
+    { id: "my-design-jobs-weekly", ok: true, jobs: 3 }
+  ]
+};
 
 /* ---------- Write and run ---------- */
 async function writeStore() {

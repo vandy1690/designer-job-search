@@ -4,12 +4,21 @@
   "private": true,
   "type": "module",
   "description": "A local dashboard for job seekers: which applications drew a reader to your website, and open jobs with someone to reach out to.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.mjs",
     "demo": "node scripts/demo.mjs",
     "demo:fresh": "node scripts/demo.mjs --empty",
     "screenshots": "node scripts/screenshots.mjs",
-    "sync:sdc": "node sync-sdc.mjs"
-  }
+    "sync:sdc": "node sync-sdc.mjs",
+    "terms": "node scripts/terms-md.mjs",
+    "app": "node scripts/make-app.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "a11y": "node scripts/a11y.mjs"
+  },
+  "license": "MIT",
+  "author": "Steven Design Services LLC (https://stevendesignco.com)",
+  "homepage": "https://stevendesignco.com"
 }

@@ -55,8 +55,8 @@
   .dash-nav { flex: 1; padding: var(--sdc-space-sm); }
   .dash-nav ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--sdc-space-xs) / 2); }
   .dash-nav__item {
-    position: relative; display: flex; align-items: center; gap: var(--sdc-space-sm);
-    min-height: var(--sdc-control-h); padding: 0 var(--sdc-space-sm); border-radius: var(--sdc-radius-sm);
+    position: relative; display: flex; align-items: center; gap: calc(var(--sdc-space-xs) * 1.5);
+    min-height: var(--sdc-control-h); padding: 0 calc(var(--sdc-space-xs) * 1.5); border-radius: var(--sdc-radius-sm);
     color: var(--sdc-text); font-size: var(--sdc-text-nav); font-weight: 500;
   }
   .dash-nav__item .dash-icon { color: var(--sdc-text-mute); }
@@ -145,7 +145,7 @@
   .dash-panel p + p { margin-top: var(--sdc-space-xs); }
 
   /* Icon tile: tinted square behind an icon. Status tiles use the status tints. */
-  .dash-tile { width: var(--dash-tile); height: var(--dash-tile); border-radius: var(--sdc-radius-sm); display: grid; place-items: center; flex: none; background: var(--sdc-surface-2); color: var(--sdc-accent); }
+  .dash-tile { width: var(--dash-tile); height: var(--dash-tile); border-radius: var(--sdc-radius-sm); display: grid; place-items: center; flex: none; background: var(--sdc-rule); color: var(--sdc-accent); }
   .dash-tile--high { background: var(--sdc-success-tint); color: var(--sdc-success); }
   .dash-tile--medium { background: var(--sdc-warning-tint); color: var(--sdc-warning); }
   .dash-tile--bad { background: var(--sdc-error-tint); color: var(--sdc-error); }
@@ -348,7 +348,8 @@ code.dash-code { font-size: var(--sdc-text-body-sm); background: var(--sdc-surfa
 :root[data-theme="light"] sdc-card { background: var(--sdc-paper-white); }
 
 /* Form fields in dialogs are white, on the page-colored dialog. */
-:root[data-theme="light"] .dash-dialog :is(.sdc-field__input, .sdc-select) { background: var(--sdc-paper-white); }
+/* Fields are white in the light theme, everywhere in the app. */
+:root[data-theme="light"] :is(.sdc-field__input, .sdc-select) { background: var(--sdc-paper-white); }
 
 /* Selects draw their own caret, inset the same distance as the date and time pickers' icons,
    so the right edges of paired fields line up. */
@@ -412,5 +413,75 @@ code.dash-code { font-size: var(--sdc-text-body-sm); background: var(--sdc-surfa
 body.is-welcome .dash-shell { grid-template-columns: minmax(0, 1fr); }
 body.is-welcome .dash-side, body.is-welcome .dash-pull { display: none; }
 #c-welcome { max-width: var(--sdc-max-narrow); }
-.dash-welcome form { display: grid; gap: var(--sdc-space-md); }
+.dash-welcome__form { display: grid; gap: var(--sdc-space-md); }
+.dash-welcome__form > .dash-note:empty, .dash-welcome__form > .sdc-field__error[hidden] { display: none; }
+/* A boxed block of help inside a setup question. */
+.dash-callout { display: grid; gap: var(--sdc-space-sm); padding: var(--sdc-space-md); border: var(--sdc-control-border) solid var(--sdc-rule-soft); border-radius: var(--sdc-radius-sm); }
+.dash-callout[hidden] { display: none; }
+.dash-callout p, .dash-callout ol { margin: 0; }
 .dash-welcome .dash-iconlist { max-width: none; }
+
+/* Job boards: a list of boards, each with a light, what it needs, and an on and off switch. */
+.dash-boards { list-style: none; margin: 0; padding: 0; display: grid; }
+.dash-boards__head { margin: var(--sdc-space-md) 0 var(--sdc-space-xs); font-size: var(--sdc-text-body); }
+.dash-board { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sdc-space-sm); align-items: start; padding: var(--sdc-space-sm) 0; border-top: var(--sdc-control-border) solid var(--sdc-rule-soft); }
+.dash-board:first-child { border-top: 0; }
+.dash-board > .dash-dot { width: calc(var(--sdc-space-xs) * 1.5); height: calc(var(--sdc-space-xs) * 1.5); margin-top: calc(var(--sdc-space-xs) / 2); }
+.dash-board__visit { white-space: nowrap; }
+.dash-board__visit .dash-icon { display: inline-block; vertical-align: -0.15em; margin-left: calc(var(--sdc-space-xs) / 4); }
+.dash-board__main { display: grid; gap: calc(var(--sdc-space-xs) / 2); min-width: 0; }
+.dash-board__top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sdc-space-xs); }
+.dash-board__name { font-weight: 600; cursor: pointer; }
+.dash-board__state { font-size: var(--sdc-text-label); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 800; color: var(--sdc-text-mute); }
+.dash-board__keys { display: grid; gap: var(--sdc-space-sm); margin-top: var(--sdc-space-xs); }
+.dash-board-add { display: grid; gap: var(--sdc-space-sm); border-top: var(--sdc-control-border) solid var(--sdc-rule-soft); margin-top: var(--sdc-space-sm); }
+
+/* On and off switch: a checkbox with role="switch". Local until SDC has one. */
+.dash-switch {
+  appearance: none; -webkit-appearance: none; margin: 0; flex: none; position: relative; cursor: pointer;
+  width: calc(var(--sdc-space-lg) + var(--sdc-space-xs)); height: var(--sdc-space-md);
+  border-radius: var(--sdc-space-md); background: var(--sdc-rule-strong);
+}
+.dash-switch::before {
+  content: ""; position: absolute; top: calc(var(--sdc-space-xs) / 2); left: calc(var(--sdc-space-xs) / 2);
+  width: var(--sdc-space-sm); height: var(--sdc-space-sm); border-radius: 50%; background: var(--sdc-paper-white);
+}
+.dash-switch:checked { background: var(--sdc-accent); }
+.dash-switch:checked::before { transform: translateX(var(--sdc-space-sm)); background: var(--sdc-accent-text); }
+.dash-switch:disabled { cursor: not-allowed; opacity: 0.4; }
+@media (prefers-reduced-motion: no-preference) {
+  .dash-switch { transition: background-color 0.15s ease; }
+  .dash-switch::before { transition: transform 0.15s ease; }
+}
+
+/* Settings links (#settings?go=boards) land below the sticky top bar, not under it. */
+[id^="set-"] { scroll-margin-top: var(--sdc-space-3xl); }
+
+/* Application links: search links for the sites the app cannot check. */
+.dash-searchlinks { display: grid; gap: var(--sdc-space-xs); margin: var(--sdc-space-sm) 0; }
+
+/* Footer on every page: version, owner, terms, license, website. */
+.dash-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sdc-space-xs) var(--sdc-space-md); padding: var(--sdc-space-md) var(--sdc-space-xl) var(--sdc-space-xl); border-top: var(--sdc-control-border) solid var(--sdc-rule-soft); font-size: var(--sdc-text-body-sm); color: var(--sdc-text-mute); }
+.dash-foot a, .dash-linkbtn { color: var(--sdc-accent); }
+.dash-foot .dash-icon { display: inline-block; vertical-align: -0.15em; margin-left: calc(var(--sdc-space-xs) / 4); }
+@media (max-width: 720px) { .dash-foot { padding: var(--sdc-space-sm); } }
+/* A button that reads as a link, for opening the terms and license. */
+.dash-linkbtn { background: none; border: 0; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 0.15em; cursor: pointer; }
+/* The agree box on the first setup screen. */
+.dash-agree { display: flex; gap: var(--sdc-space-sm); align-items: flex-start; padding: var(--sdc-space-sm); border: var(--sdc-control-border) solid var(--sdc-rule); border-radius: var(--sdc-radius-sm); }
+.dash-agree input { margin-top: calc(var(--sdc-space-xs) / 2); accent-color: var(--sdc-accent); width: var(--sdc-space-sm); height: var(--sdc-space-sm); flex: none; }
+/* Terms and license in a dialog. */
+.dash-terms { display: grid; gap: var(--sdc-space-xs); max-width: 70ch; }
+.dash-terms h3 { margin: var(--sdc-space-sm) 0 0; font-size: var(--sdc-text-body); }
+.dash-terms p { margin: 0; }
+.dash-license { white-space: pre-wrap; font-size: var(--sdc-text-body-sm); margin: 0; }
+
+/* Hide on a job card: the card fades and shrinks a little before the list closes up. */
+@media (prefers-reduced-motion: no-preference) {
+  .dash-leads > li { transition: opacity 0.3s ease, transform 0.3s ease; }
+}
+.dash-leads > li.is-leaving { opacity: 0; transform: scale(0.96); pointer-events: none; }
+
+/* Links inside sentences are underlined, so color is never the only cue (WCAG 1.4.1). Button-styled
+   links keep their own look. */
+:is(p, li, .dash-note) a:not(.sdc-btn):not(.dash-rowbtn):not(.dash-fix):not(.sdc-card__link):not(.dash-lead__title):not(.dash-jd) { text-decoration: underline; text-underline-offset: 0.15em; }

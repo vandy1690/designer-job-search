@@ -2,6 +2,8 @@
 // and edits applications, contacts, matches and settings. Pulls run on the server.
 import { loadAll, save, api } from "./store.js";
 import { countsOf, atsOfUrl, companyKey, metroLabel } from "./engine.js";
+import { BOARDS, boardOn, linkOn } from "./boards.js";
+import { TERMS, TERMS_VERSION, LICENSE, OWNER, SITE, APP_VERSION } from "./terms.js";
 
 const $ = (id) => document.getElementById(id);
 const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -14,7 +16,7 @@ const safeUrl = (u) => { try { const x = new URL(String(u)); return x.protocol =
 const dot = (iso) => { const p = String(iso).split("-"); return p.length < 3 ? "" : `${+p[1]}.${p[2].slice(0, 2)}`; };
 
 // Page names come from the address ("checkout-redesign" reads "Checkout Redesign"). Settings,
-// Advanced, Page names fixes any that read wrong, like "paypal" | "PayPal".
+// Advanced, Page names fixes any that read wrong, like "github" | "GitHub".
 const PAGE = { "home": "Home", "resume": "Resume" };
 const pageName = (p) => ((S && S.settings.pageNames) || {})[p] || PAGE[p] || String(p).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const CH = { recruiter: "Recruiter or referral touch first", ats: "From inside an applicant system", linkedin: "LinkedIn", search: "Google search", ai: "AI assistant", referral: "Another website", direct: "Direct (email, PDF or stripped)" };
@@ -35,6 +37,7 @@ const PAGE_SIZE = 10;
 
 let S = null; // stored data
 let G = { hasClient: false, connected: false }; // Google connection
+let BK = { adzuna: { saved: false } };            // which job boards have a key saved (never the key)
 let props = null; // GA4 properties, once connected
 const paging = {};
 let filterOdds = "all";
@@ -72,7 +75,7 @@ function views() {
   return [
     { id: "overview", group: "main", label: "Overview", icon: "overview", sub: "Your sites at a glance" },
     { id: "pull", group: "main", label: "Application pull", icon: "pull", sub: "An estimate of which applications drew a reader, and who it likely was" },
-    { id: "leads", group: "jobs", label: "Warm leads", icon: "warm", sub: "Jobs that match you, and who to reach out to about each one", badge: newLeadCount() },
+    { id: "leads", group: "jobs", label: "Application links", icon: "warm", sub: "Jobs that match you, and who to reach out to about each one", badge: newLeadCount() },
     { id: "latest", group: "main", label: "Latest pull", icon: "latest", sub: last ? `What came in over the last 7 days · last pulled ${dot(pulledDate(last))}` : "No pull yet", badge: latestCount },
     { id: "conclusions", group: "main", label: "Conclusions", icon: "bulb", sub: "What the data says" },
     { id: "reading", group: "main", label: "Reading and reach", icon: "book", sub: "Pages, arrival paths and places" },
@@ -387,7 +390,7 @@ function renderHealth() {
 }
 
 
-/* ---------- Warm leads ---------- */
+/* ---------- Application links ---------- */
 // Jobs that match you first; then who to reach out to about each one.
 
 // How warm a contact is, from the strongest thing that has happened with them.
@@ -395,7 +398,7 @@ const WARMTH = { call: 3, interview: 3, referral: 3, "message-in": 3, "email-in"
 const warmText = (k) => ({ call: "You talked", interview: "Interviewed", referral: "Referral", "message-in": "They wrote to you", "email-in": "They emailed you", "profile-view": "Viewed your profile", connection: "You sent a connection request", "message-out": "You wrote to them", "email-out": "You emailed them" }[k] || "Contact");
 const CONNECT_NOTE = "Hi {first}, I saw the {role} role at {company}. {pitch} I would be glad to connect. Thanks, {me}";
 const MESSAGE_NOTE = "Hi {first},\n\nI saw the {role} role at {company} and wanted to reach out directly. {pitch}\n\nWould you be open to a short conversation, or could you point me to the person hiring for this role?\n\nThanks,\n{me}";
-const LEAD_DEFAULTS = { titles: ["product designer", "design systems"], seniority: ["principal", "staff", "lead", "senior"], skip: ["manager", "director"], locations: ["remote"], payFloor: 0, postedWithinDays: 0, minWarmth: 2, extraBoards: [], connectNote: CONNECT_NOTE, messageNote: MESSAGE_NOTE };
+const LEAD_DEFAULTS = { titles: ["product designer", "design systems"], seniority: ["principal", "staff", "lead", "senior"], skip: ["manager", "director"], locations: ["remote"], payFloor: 0, postedWithinDays: 0, minWarmth: 2, extraBoards: [], boards: {}, customBoards: [], connectNote: CONNECT_NOTE, messageNote: MESSAGE_NOTE };
 const leadRules = () => ({ ...LEAD_DEFAULTS, ...(S.settings.leads || {}) });
 const word = (w) => new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z])`, "i");
 const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -406,7 +409,8 @@ function peopleAt(key) {
   const by = new Map();
   for (const t of S.touches) {
     if (!t.person || t.kind === "rejection" || companyKey(t.company) !== key) continue;
-    const cur = by.get(t.person) || { person: t.person, company: t.company, warmth: 0, last: "", kind: "" };
+    const cur = by.get(t.person) || { person: t.person, company: t.company, warmth: 0, last: "", kind: "", profile: "", profileAt: "" };
+    if (t.linkedin && String(t.at) >= cur.profileAt) { cur.profile = t.linkedin; cur.profileAt = String(t.at); }
     const w = WARMTH[t.kind] || 1;
     if (w > cur.warmth || (w === cur.warmth && String(t.at) > cur.last)) { cur.warmth = w; cur.kind = t.kind; }
     if (String(t.at) > cur.last) cur.last = String(t.at);
@@ -434,7 +438,7 @@ function leadList() {
     const t = String(j.title).toLowerCase();
     if (!L.titles.some((w) => t.includes(w.toLowerCase())) || !L.seniority.some((w) => word(w).test(t)) || L.skip.some((w) => word(w).test(t))) continue;
     const loc = String(j.location).toLowerCase();
-    if (L.locations.length && !L.locations.some((w) => loc.includes(w.toLowerCase()))) continue;
+    if (L.locations.length && loc && !L.locations.some((w) => loc.includes(w.toLowerCase()))) continue;
     if (L.postedWithinDays > 0 && j.posted && days(j.posted) > L.postedWithinDays) continue;
     if (alreadyApplied(j)) { out.applied++; continue; }
     const isHidden = hidden.has(j.id);
@@ -492,7 +496,7 @@ function leadRows(rows) {
       <div class="dash-lead__main">
         <div class="dash-lead__tags"><span class="dash-chip dash-chip--${tone}">${j.match}</span>${isNew ? '<span class="dash-chip dash-chip--new">New</span>' : ""}</div>
         <a class="dash-lead__title" href="${esc(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer">${esc(j.title)}${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (job posting, opens in a new tab)</span></a>
-        <p class="dash-note">${esc(j.company)} · ${esc(j.location || "Location not listed")}${posted ? ` · ${esc(posted)}` : ""}</p>
+        <p class="dash-note">${[j.company, j.location || "Location not listed", posted, j.source ? `via ${j.source}` : ""].filter(Boolean).map(esc).join(" · ")}</p>
         <p class="dash-lead__pay${j.below ? " is-below" : ""}">${esc(pay)}${j.below ? ` · under your ${money(leadRules().payFloor)} floor` : ""}</p>
         ${j.why.length ? `<p class="dash-note dash-lead__why">${esc(j.why.join(" · "))}</p>` : ""}
         <div class="dash-lead__contact">${who}</div>
@@ -506,8 +510,20 @@ function leadRows(rows) {
   }).join("")}</ul>`;
 }
 
+// Search links for the sites the app cannot check, the ones you turned on in Job boards.
+function renderSearchLinks() {
+  const L = leadRules();
+  const sites = BOARDS.filter((b) => b.search && linkOn(S.settings.leads, b.id));
+  $("leads-links").innerHTML = sites.length ? `<div class="dash-searchlinks">
+      <p class="dash-note"><b>Search these yourself.</b> The app cannot check these sites, so each link opens a search for your job titles.</p>
+      <div class="dash-inline">${sites.map((b) => `<a class="dash-rowbtn" href="${esc(safeUrl(b.search(L)))}" target="_blank" rel="noopener noreferrer">${esc(b.name)}${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (opens in a new tab)</span></a>`).join("")}
+        <a class="dash-fix" href="#settings?go=boards">Choose sites</a></div>
+    </div>` : "";
+}
+
 function renderLeads() {
   const L = leadRules();
+  renderSearchLinks();
   if (!S.leads) {
     $("leads-summary").innerHTML = '<p>The first check has not run yet. It runs on its own within a minute of starting the app, or press <b>Check now</b>.</p>';
     $("leads-list").innerHTML = ""; $("leads-pager").innerHTML = ""; $("leads-more").innerHTML = ""; $("leads-filters").innerHTML = "";
@@ -515,18 +531,19 @@ function renderLeads() {
   }
   const r = leadList();
   const list = (x) => x.map((w) => w.toLowerCase()).join(", ");
-  $("leads-checked").textContent = `Checked ${dot(new Date(S.leads.checkedAt).toISOString().slice(0, 10))} · ${S.leads.companies} companies`;
+  const nBoards = boardsOnCount();
+  $("leads-checked").textContent = `Checked ${dot(new Date(S.leads.checkedAt).toISOString().slice(0, 10))} · ${nBoards} job ${nBoards === 1 ? "board" : "boards"}.`;
   $("leads-filters").innerHTML = `<p class="sdc-field__label" id="leads-filter-label">Show</p><div class="dash-filters" role="group" aria-labelledby="leads-filter-label">
     <button type="button" class="sdc-btn dash-filter dash-filter--all${!leadsOnlyKnown ? " sdc-btn--primary" : ""}" aria-pressed="${!leadsOnlyKnown}" data-leads-known="0">${icon("overview", "dash-icon--sm")}All matches · ${r.all}</button>
     <button type="button" class="sdc-btn dash-filter dash-filter--high${leadsOnlyKnown ? " sdc-btn--primary" : ""}" aria-pressed="${leadsOnlyKnown}" data-leads-known="1">${icon("users", "dash-icon--sm")}Where you know someone · ${r.known}</button>
   </div>`;
-  $("leads-summary").innerHTML = `<p class="dash-note">Jobs with <b>${list(L.seniority)}</b> and <b>${list(L.titles)}</b> in the title, ${L.locations.length ? `in <b>${list(L.locations)}</b>` : "in any location"}${L.postedWithinDays > 0 ? `, posted in the last ${L.postedWithinDays} days` : ""}. Best match first. ${r.applied} you already applied to ${r.applied === 1 ? "is" : "are"} left out. <a href="#settings?go=leads">Change these</a>${r.hidden ? ` · <button type="button" class="dash-rowbtn" id="leads-toggle-hidden">${leadsShowHidden ? "Back to the list" : `Show the ${r.hidden} you hid`}</button>` : ""}</p>`;
+  $("leads-summary").innerHTML = `<p class="dash-note">Jobs with <b>${list(L.seniority)}</b> and <b>${list(L.titles)}</b> in the title, ${L.locations.length ? `in <b>${list(L.locations)}</b>` : "in any location"}${L.postedWithinDays > 0 ? `, posted in the last ${L.postedWithinDays} days` : ""}. Best match first, from ${boardsOnCount()} job boards (<a href="#settings?go=boards">choose job boards</a>). ${r.applied} you already applied to ${r.applied === 1 ? "is" : "are"} left out. <a href="#settings?go=leads">Change these</a>${r.hidden ? ` · <button type="button" class="dash-rowbtn" id="leads-toggle-hidden">${leadsShowHidden ? "Back to the list" : `Show the ${r.hidden} you hid`}</button>` : ""}</p>`;
   if (!r.shown.length) { $("leads-list").innerHTML = `<p class="dash-note">${leadsShowHidden ? "Nothing hidden." : leadsOnlyKnown ? "No matching jobs where you know someone right now." : "No open jobs match right now. The next check runs tomorrow."}</p>`; $("leads-pager").innerHTML = ""; }
   else paged("leads", r.shown, leadRows, "leads-list", "leads-pager", 9);
   const names = new Map(S.touches.filter((t) => t.person && t.company).map((t) => [companyKey(t.company), t.company]));
   const missing = (S.leads.withoutBoard || []).map((k) => names.get(k) || k).sort((a, b) => a.localeCompare(b));
   $("leads-more").innerHTML = (missing.length ? `<details class="dash-more-options"><summary>${missing.length} companies where you know someone are not checked, because no job board is on file</summary>
-      <p class="dash-note">To include one, paste a link to any of its job postings under <a href="#settings?go=leads">Settings, Warm leads</a>. Links from Greenhouse, Lever, Ashby, Workday and SmartRecruiters work.</p>
+      <p class="dash-note">To include one, add its job board under <a href="#settings?go=boards">Settings, Job boards</a>. Links from Greenhouse, Lever, Ashby and Workday work.</p>
       <p>${missing.map(esc).join(" · ")}</p></details>` : "") +
     ((S.leads.errors || []).length ? `<p class="dash-note">Could not check: ${S.leads.errors.map((e) => esc(e.company)).join(", ")}.</p>` : "");
   $("leads-filters").onclick = (e) => { const b = e.target.closest("[data-leads-known]"); if (!b) return; leadsOnlyKnown = b.dataset.leadsKnown === "1"; paging.leads = 0; renderLeads(); $("leads-filters").querySelector(`[data-leads-known="${b.dataset.leadsKnown}"]`).focus(); };
@@ -546,6 +563,17 @@ async function checkLeadsNow() {
     renderNav(); renderLeads();
   } catch (err) { st.textContent = err.message; }
   finally { b.disabled = false; }
+}
+
+// A LinkedIn profile link, cleaned up: https://www.linkedin.com/in/name, or "" if it is not one.
+function liProfile(value) {
+  const v = String(value || "").trim();
+  if (!v) return "";
+  try {
+    const u = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
+    if (!/(^|\.)linkedin\.com$/i.test(u.hostname) || !/^\/in\/[^/]+/i.test(u.pathname)) return "";
+    return `https://www.linkedin.com${u.pathname.replace(/\/+$/, "")}`;
+  } catch (e) { return ""; }
 }
 
 // LinkedIn searches. LinkedIn takes Boolean keywords; network F and S are your 1st and 2nd connections.
@@ -578,24 +606,34 @@ function reachOut(id) {
       </fieldset>
       <div class="dash-form-grid">
         ${field("r-how", "How", select("r-how", "connection", [["connection", "Connection request"], ["message-out", "Message (already connected)"]]))}
-        <div class="sdc-field"><div class="sdc-field__head"><span class="sdc-field__label">Their profile</span></div><a class="sdc-btn" id="r-open" href="#" target="_blank" rel="noopener noreferrer">${icon("external", "dash-icon--sm")}Open on LinkedIn</a></div>
+        <div class="sdc-field"><div class="sdc-field__head"><span class="sdc-field__label">On LinkedIn</span></div><a class="sdc-btn" id="r-open" href="#" target="_blank" rel="noopener noreferrer">${icon("external", "dash-icon--sm")}<span id="r-open-label">Open their profile</span><span class="sdc-u-sr-only"> (opens in a new tab)</span></a></div>
+        ${field("r-profile", "Their LinkedIn profile link", input("r-profile", "", "url", 'placeholder="linkedin.com/in/their-name" autocomplete="off"'), { span: true, hint: "Paste it once and the button opens their profile from then on. It is saved when you log the outreach." })}
       </div>
       <div class="sdc-field"><div class="sdc-field__head"><label class="sdc-field__label" for="r-note">Note</label><span class="sdc-field__value" id="r-count"></span></div>
         <textarea class="sdc-field__input" id="r-note" name="r-note" rows="7"></textarea>
-        <p class="sdc-field__hint">Edit it here, or change the starting text under Settings, Warm leads.</p></div>
+        <p class="sdc-field__hint">Edit it here, or change the starting text under Settings, Application links.</p></div>
       <div class="dash-inline"><button type="button" class="sdc-btn" id="r-copy">${icon("steps", "dash-icon--sm")}Copy note</button><span class="dash-note" id="r-copy-status" role="status" aria-live="polite"></span></div>`,
     onOpen: (form) => {
       let edited = false;
       const who = () => { const v = (form.querySelector('input[name="r-who"]:checked') || {}).value; return v === "new" || v === undefined ? $("r-name").value.trim() : people[Number(v)].person; };
+      // The profile box shows the saved link for whoever is picked.
+      const pickedProfile = () => { const v = (form.querySelector('input[name="r-who"]:checked') || {}).value; return v === "new" || v === undefined ? "" : people[Number(v)].profile || ""; };
+      $("r-profile").value = pickedProfile();
       const update = () => {
         const name = who(), how = $("r-how").value;
+        const profile = liProfile($("r-profile").value);
         if (!edited) $("r-note").value = fill(how === "connection" ? L.connectNote : L.messageNote, name);
         const n = $("r-note").value.length;
         $("r-count").textContent = how === "connection" ? `${n} of 200 characters${n > 200 ? ". Too long for a free LinkedIn account (Premium allows 300)" : ""}` : `${n} characters`;
-        $("r-open").href = name ? liSearch(`"${name}" ${quoted}`) : finds[0][1];
+        $("r-open").href = profile || (name ? liSearch(`"${name}" ${quoted}`) : finds[0][1]);
+        $("r-open-label").textContent = profile ? "Open their profile" : name ? "Find them on LinkedIn" : "Search LinkedIn";
         $("r-name").closest(".sdc-field").hidden = (form.querySelector('input[name="r-who"]:checked') || {}).value !== "new";
       };
-      form.addEventListener("change", (e) => { if (e.target.name === "r-who" || e.target.id === "r-how") { edited = false; update(); } });
+      form.addEventListener("change", (e) => {
+        if (e.target.name === "r-who") $("r-profile").value = pickedProfile();
+        if (e.target.name === "r-who" || e.target.id === "r-how") { edited = false; update(); }
+      });
+      $("r-profile").addEventListener("input", update);
       $("r-name").addEventListener("input", () => { if (!edited) update(); else update(); });
       $("r-note").addEventListener("input", () => { edited = true; update(); });
       $("r-copy").onclick = async () => { try { await navigator.clipboard.writeText($("r-note").value); $("r-copy-status").textContent = "Copied. Paste it into LinkedIn."; } catch (e) { $("r-note").select(); $("r-copy-status").textContent = "Press Command C to copy."; } };
@@ -606,8 +644,10 @@ function reachOut(id) {
     onSubmit: async (fd, form) => {
       const person = form._who();
       if (!person) return { "r-name": "Add the name of the person you contacted." };
+      const raw = String(fd.get("r-profile") || "").trim(), linkedin = liProfile(raw);
+      if (raw && !linkedin) return { "r-profile": "Paste the link to their LinkedIn profile. It looks like linkedin.com/in/their-name." };
       const now = localNow();
-      const touch = { id: uniqueId(slugify(`${now.date}-${j.company}-${person}`), S.touches), at: `${now.date}T${now.time}`, company: j.company, person, kind: fd.get("r-how"), applicationId: "", places: [], notes: `About ${j.title}: ${j.url}` };
+      const touch = { id: uniqueId(slugify(`${now.date}-${j.company}-${person}`), S.touches), at: `${now.date}T${now.time}`, company: j.company, person, kind: fd.get("r-how"), applicationId: "", places: [], notes: `About ${j.title}: ${j.url}`, ...(linkedin ? { linkedin } : {}) };
       S.touches.push(touch);
       await save("touches", S.touches);
       renderAll();
@@ -644,7 +684,7 @@ function touchRows(rows) {
     rows.map((t) => {
       const [d, time] = String(t.at).split("T");
       const app = S.applications.find((a) => a.id === t.applicationId);
-      return `<tr><td><strong>${dot(d)}</strong>${time ? ` ${esc(time)}` : ""}</td><td>${esc(t.company)}</td><td>${esc(t.person)}</td><td>${esc(kindLabel(t.kind))}</td>` +
+      return `<tr><td><strong>${dot(d)}</strong>${time ? ` ${esc(time)}` : ""}</td><td>${esc(t.company)}</td><td>${t.linkedin && liProfile(t.linkedin) ? `<a href="${esc(liProfile(t.linkedin))}" target="_blank" rel="noopener noreferrer">${esc(t.person)}${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (LinkedIn profile, opens in a new tab)</span></a>` : esc(t.person)}</td><td>${esc(kindLabel(t.kind))}</td>` +
         `<td>${app ? esc(`${app.company} ${app.role}`) : ""}</td><td>${esc(t.notes)}</td>` +
         `<td><button type="button" class="dash-rowbtn" data-edit-touch="${esc(t.id)}" aria-label="Edit contact with ${esc(t.person || t.company)}">${icon("edit", "dash-icon--sm")}Edit</button></td></tr>`;
     }).join("") + "</tbody></table>";
@@ -663,7 +703,7 @@ const input = (id, value, type = "text", extra = "") => `<input class="sdc-field
 const select = (id, value, options) => `<span class="dash-select"><select class="sdc-select" id="${id}" name="${id}">${options.map(([v, l]) => `<option value="${esc(v)}"${v === value ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></span>`;
 const textarea = (id, value) => `<textarea class="sdc-field__input" id="${id}" name="${id}" rows="3">${esc(value)}</textarea>`;
 
-function openDialog({ title, body, submitLabel = "Save", onSubmit, onDelete, onOpen }) {
+function openDialog({ title, body, submitLabel = "Save", onSubmit = () => null, onDelete, onOpen, readOnly = false }) {
   const dlg = $("dialog");
   const opener = document.activeElement;
   dlg.innerHTML = `<form method="dialog" novalidate>
@@ -671,11 +711,19 @@ function openDialog({ title, body, submitLabel = "Save", onSubmit, onDelete, onO
     ${body}
     <p class="dash-status" id="dialog-status" role="status" aria-live="polite"></p>
     <div class="dash-dialog__actions">${onDelete ? '<button type="button" class="sdc-btn dash-danger" data-act="delete">Delete</button><span class="dash-toolbar__grow"></span>' : ""}
-      <button type="button" class="sdc-btn" data-act="cancel">Cancel</button>
-      <button type="submit" class="sdc-btn sdc-btn--primary">${esc(submitLabel)}</button></div></form>`;
+      ${readOnly ? "" : '<button type="button" class="sdc-btn" data-act="cancel">Cancel</button>'}
+      <button type="submit" class="sdc-btn sdc-btn--primary">${esc(readOnly ? "Close" : submitLabel)}</button></div></form>`;
   const form = dlg.querySelector("form");
-  const close = () => { dlg.close(); if (opener && opener.focus) opener.focus(); };
-  form.querySelector('[data-act="cancel"]').onclick = close;
+  const close = () => { if (dlg.open) dlg.close(); if (opener && opener.focus) opener.focus(); };
+  // A click on the dimmed background closes the dialog, as does Escape. A press that starts
+  // inside the dialog (selecting text, say) and ends outside it does not.
+  const outside = (e) => { const r = dlg.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
+  let pressedOutside = false;
+  dlg.onpointerdown = (e) => { pressedOutside = e.target === dlg && outside(e); };
+  dlg.onclick = (e) => { if (pressedOutside && e.target === dlg && outside(e)) close(); pressedOutside = false; };
+  dlg.oncancel = (e) => { e.preventDefault(); close(); };
+  const cancel = form.querySelector('[data-act="cancel"]');
+  if (cancel) cancel.onclick = close;
   const del = form.querySelector('[data-act="delete"]');
   if (del) del.onclick = async () => { if (del.dataset.confirm) { await onDelete(); close(); } else { del.dataset.confirm = "1"; del.textContent = "Delete for good?"; } };
   form.onsubmit = async (e) => {
@@ -695,7 +743,7 @@ function openDialog({ title, body, submitLabel = "Save", onSubmit, onDelete, onO
     close();
   };
   dlg.showModal();
-  const firstInput = form.querySelector("input, select, textarea");
+  const firstInput = readOnly ? form.querySelector('button[type="submit"]') : form.querySelector("input, select, textarea");
   if (firstInput) firstInput.focus();
   if (onOpen) onOpen(form);
 }
@@ -780,25 +828,32 @@ function importApps() {
     submitLabel: "Import",
     body: field("f-csv", "Paste CSV", textarea("f-csv", ""), { span: true, hint: "First row is the header. Columns: company, role, submitted (YYYY-MM-DD), jobUrl, places, status, req. Places can hold several, separated by semicolons." }),
     onSubmit: async (fd) => {
-      const rows = parseCsv(fd.get("f-csv") || "");
-      if (rows.length < 2) return { "f-csv": "Paste a header row and at least one application." };
-      const head = rows[0].map((h) => h.trim().toLowerCase());
-      const col = (r, name) => { const i = head.indexOf(name.toLowerCase()); return i < 0 ? "" : (r[i] || "").trim(); };
-      if (head.indexOf("company") < 0 || head.indexOf("role") < 0) return { "f-csv": "The header needs company and role columns." };
-      let added = 0;
-      for (const r of rows.slice(1)) {
-        const company = col(r, "company"), role = col(r, "role"), submitted = col(r, "submitted");
-        if (!company || !role) continue;
-        if (S.applications.some((a) => a.company === company && a.role === role && a.submitted === submitted)) continue;
-        const jobUrl = col(r, "jobUrl");
-        S.applications.push({ id: uniqueId(slugify(`${company}-${role}`), S.applications), company, role, req: col(r, "req"), submitted, submittedTime: "", jobUrl, ats: atsOfUrl(jobUrl), places: splitList(col(r, "places")), status: col(r, "status") || "submitted", statusDate: "", notes: "" });
-        added++;
-      }
+      const r = addAppsFromCsv(fd.get("f-csv"));
+      if (r.error) return { "f-csv": r.error };
+      const added = r.added;
       await save("applications", S.applications);
       renderAll();
       setStatus(`Imported ${added} ${added === 1 ? "application" : "applications"}.`);
     }
   });
+}
+// Adds the rows of a pasted CSV to S.applications (the caller saves). Returns { added } or { error }.
+function addAppsFromCsv(text) {
+  const rows = parseCsv(text || "");
+  if (rows.length < 2) return { error: "Paste a header row and at least one application." };
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (r, name) => { const i = head.indexOf(name.toLowerCase()); return i < 0 ? "" : (r[i] || "").trim(); };
+  if (head.indexOf("company") < 0 || head.indexOf("role") < 0) return { error: "The header needs company and role columns." };
+  let added = 0;
+  for (const r of rows.slice(1)) {
+    const company = col(r, "company"), role = col(r, "role"), submitted = col(r, "submitted");
+    if (!company || !role) continue;
+    if (S.applications.some((a) => a.company === company && a.role === role && a.submitted === submitted)) continue;
+    const jobUrl = col(r, "jobUrl");
+    S.applications.push({ id: uniqueId(slugify(`${company}-${role}`), S.applications), company, role, req: col(r, "req"), submitted, submittedTime: "", jobUrl, ats: atsOfUrl(jobUrl), places: splitList(col(r, "places")), status: col(r, "status") || "submitted", statusDate: "", notes: "" });
+    added++;
+  }
+  return { added };
 }
 function parseCsv(text) {
   const rows = []; let row = [], cell = "", q = false;
@@ -825,6 +880,7 @@ function editTouch(id, prefill = {}) {
       ${field("t-kind", "Kind", select("t-kind", t.kind, KINDS.map((k) => [k, kindLabel(k)])))}
       ${field("t-company", "Company", input("t-company", t.company, "text", "required"), { req: true })}
       ${field("t-person", "Person", input("t-person", t.person))}
+      ${field("t-linkedin", "LinkedIn profile", input("t-linkedin", t.linkedin || "", "url", 'placeholder="linkedin.com/in/their-name" autocomplete="off"'), { hint: "Optional. Reach out then opens their profile directly." })}
       ${field("t-app", "Application", select("t-app", t.applicationId || "", apps), { span: true })}
       ${field("t-places", "Places", input("t-places", (t.places || []).join("; ")), { hint: "Where this person or office is, separated by semicolons." })}
       ${field("t-notes", "Notes", textarea("t-notes", t.notes), { span: true })}
@@ -835,8 +891,10 @@ function editTouch(id, prefill = {}) {
       const company = fd.get("t-company").trim(), at = fd.get("t-at");
       if (!company) errors["t-company"] = "Add the company.";
       if (!at) errors["t-at"] = "Add when it happened.";
+      const rawLi = String(fd.get("t-linkedin") || "").trim();
+      if (rawLi && !liProfile(rawLi)) errors["t-linkedin"] = "Paste the link to their LinkedIn profile. It looks like linkedin.com/in/their-name.";
       if (Object.keys(errors).length) return errors;
-      const next = { ...t, at, company, person: fd.get("t-person").trim(), kind: fd.get("t-kind"), applicationId: fd.get("t-app"), places: splitList(fd.get("t-places")), notes: fd.get("t-notes").trim() };
+      const next = { ...t, at, company, person: fd.get("t-person").trim(), kind: fd.get("t-kind"), applicationId: fd.get("t-app"), places: splitList(fd.get("t-places")), notes: fd.get("t-notes").trim(), linkedin: liProfile(rawLi) };
       if (id) S.touches = S.touches.map((x) => (x.id === id ? next : x));
       else S.touches.push({ ...next, id: uniqueId(slugify(`${at.slice(0, 10)}-${company}-${next.person || next.kind}`), S.touches) });
       await save("touches", S.touches);
@@ -933,8 +991,14 @@ function setupSteps() {
   ];
 }
 
-const setupDone = () => { try { return new Set(JSON.parse(localStorage.getItem("dash-setup") || "[]")); } catch (e) { return new Set(); } };
-const saveSetupDone = (set) => { try { localStorage.setItem("dash-setup", JSON.stringify([...set])); } catch (e) { /* private mode */ } };
+// Which Google setup steps are done. Saved with the settings, so a closed window (even an
+// Incognito one) picks up where it left off.
+const setupDone = () => new Set(((S.settings || {}).setup || {}).google || []);
+const saveSetupDone = (set) => {
+  if (!S.settings) return;
+  S.settings.setup = { ...(S.settings.setup || {}), google: [...set] };
+  save("settings", S.settings).catch(() => { /* the next save carries it */ });
+};
 let openStep = null;
 
 // The other way: a Google sign-in. Needs more steps, and Google ends it weekly unless the app is published.
@@ -1047,13 +1111,13 @@ function renderSettings() {
       <p class="dash-note dash-span2">Visits that match any line below are left out. One entry per line.</p>
       ${lists.map(([k, label, hint]) => field(`x-${k}`, label, textarea(`x-${k}`, (ex[k] || []).join("\n")), { hint })).join("")}
       ${field("x-kit", "Adobe Fonts kit (optional)", input("x-kit", st.fontKit || "", "text", 'placeholder="abc1234" autocomplete="off" spellcheck="false"'), { hint: "Headings use Nickel Gothic when your Adobe Fonts kit has it, and League Gothic otherwise. To use your kit, type its ID (the code in its embed link) and add localhost to the kit's domains in Adobe Fonts." })}
-      ${field("x-pages", "Page names", textarea("x-pages", Object.entries(st.pageNames || {}).map(([k, v]) => `${k} | ${v}`).join("\n")), { span: true, hint: "Only for pages whose name reads wrong. One per line: the page's address | its name. Example: paypal | PayPal." })}
+      ${field("x-pages", "Page names", textarea("x-pages", Object.entries(st.pageNames || {}).map(([k, v]) => `${k} | ${v}`).join("\n")), { span: true, hint: "Only for pages whose name reads wrong. One per line: the page's address | its name. Example: github | GitHub." })}
       <div class="dash-span2 dash-inline"><button type="submit" class="sdc-btn sdc-btn--primary">Save</button><span class="dash-note" id="filter-status" role="status" aria-live="polite"></span></div>
     </form></details></div></sdc-card>`;
 
   const LR = leadRules();
-  const leadsCard = panel("Warm leads", `
-    <p class="dash-note">Which jobs show on Warm leads. Changes show right away; new job boards are read on the next check.</p>
+  const leadsCard = panel("Application links", `
+    <p class="dash-note">Which jobs show on Application links. Changes show right away; new job boards are read on the next check.</p>
     <form id="leads-form" class="dash-form-grid" novalidate>
       ${field("l-titles", "Job titles to look for", textarea("l-titles", LR.titles.join("\n")), { hint: "One per line. A job shows if its title has any of these." })}
       ${field("l-seniority", "Seniority", textarea("l-seniority", LR.seniority.join("\n")), { hint: "One per line. The title must have one of these words." })}
@@ -1064,73 +1128,19 @@ function renderSettings() {
       ${field("l-days", "Posted within", select("l-days", String(LR.postedWithinDays || 0), [["0", "Any time, while it is open"], ["30", "30 days"], ["60", "60 days"], ["90", "90 days"]]))}
       ${field("l-connect", "Connection note", textarea("l-connect", LR.connectNote), { span: true, hint: "Starting text for a connection request. {first} and {name} are the person; {role}, {company} and {link} the job; {me} and {pitch} come from your profile. Free LinkedIn accounts allow 200 characters." })}
       ${field("l-message", "Message", textarea("l-message", LR.messageNote), { span: true, hint: "Starting text when you are already connected. Same fill-ins." })}
-      ${field("l-extra", "More job boards", textarea("l-extra", (LR.extraBoards || []).join("\n")), { span: true, hint: "One per line: Company | a link to any of its job postings. Example: Example Co | https://example.wd1.myworkdayjobs.com/careers/job/... Links from Greenhouse, Lever, Ashby, Workday and SmartRecruiters work." })}
       <div class="dash-span2 dash-inline"><button type="submit" class="sdc-btn sdc-btn--primary">Save</button><span class="dash-note" id="leads-form-status" role="status" aria-live="polite"></span></div>
     </form>`, "warm");
 
+  const agreed = st.terms && st.terms.acceptedAt ? ` You agreed to the terms of use on ${esc(dot(st.terms.acceptedAt.slice(0, 10)))}.` : "";
+  const aboutCard = panel("About", `
+    <p>Designer Job Search ${esc(APP_VERSION)}, made by ${esc(OWNER)}. ${siteLink("stevendesignco.com")}</p>
+    <p class="dash-note">Free under the MIT License, with no warranty. Matches are estimates, and job listings come from other websites.${agreed}</p>
+    <div class="dash-inline"><button type="button" class="sdc-btn" data-show="terms">Terms of use</button><button type="button" class="sdc-btn" data-show="license">MIT License</button></div>`, "help");
   const box = $("c-settings");
-  box.innerHTML = `<div id="set-google">${googleCard}</div><div id="set-websites">${sitesCard}</div><div id="set-pulls">${pullCard}</div><div id="set-leads">${leadsCard}</div><div id="set-advanced">${advancedCard}</div>`;
+  box.innerHTML = `<div id="set-google">${googleCard}</div><div id="set-websites">${sitesCard}</div><div id="set-pulls">${pullCard}</div><div id="set-leads">${leadsCard}</div><div id="set-boards"></div><div id="set-advanced">${advancedCard}</div><div id="set-about">${aboutCard}</div>`;
 
-  // Setup steps
-  box.querySelectorAll("[data-step]").forEach((b) => { b.onclick = () => { openStep = openStep === b.dataset.step && b.getAttribute("aria-expanded") === "true" ? "__none" : b.dataset.step; renderSettings(); const again = box.querySelector(`[data-step="${b.dataset.step}"]`); if (again) again.focus(); }; });
-  box.querySelectorAll("[data-step-done]").forEach((b) => {
-    b.onclick = () => {
-      const done = setupDone(); done.add(b.dataset.stepDone); saveSetupDone(done);
-      const steps = setupSteps(); const i = steps.findIndex((s) => s.id === b.dataset.stepDone);
-      openStep = (steps.slice(i + 1).find((s) => !done.has(s.id)) || steps[steps.length - 1]).id;
-      renderSettings();
-      const next = box.querySelector(`[data-step="${openStep}"]`); if (next) next.focus();
-    };
-  });
-  box.querySelectorAll("[data-copy]").forEach((b) => {
-    b.onclick = async () => {
-      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; } catch (e) { b.textContent = "Select and copy"; }
-      setTimeout(() => { b.textContent = "Copy"; }, 2000);
-    };
-  });
-  const saForm = $("g-sa");
-  if (saForm) saForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const status = $("g-sa-status");
-    const file = $("g-sa-file").files[0];
-    if (!file) { status.textContent = "Choose the .json file first."; $("g-sa-file").focus(); return; }
-    let key;
-    try { key = JSON.parse(await file.text()); } catch (err) { status.textContent = "That file is not the key. Choose the .json file Google downloaded."; return; }
-    try {
-      G = await api("/api/google/service-account", "PUT", key);
-      const done = setupDone(); ["project", "apis", "robot", "key", "upload"].forEach((id) => done.add(id)); saveSetupDone(done);
-      openStep = "access";
-      renderSettings();
-      const next = box.querySelector('[data-step="access"]'); if (next) next.focus();
-    } catch (err) { status.textContent = err.message; }
-  };
-  const check = $("g-check");
-  if (check) check.onclick = async () => {
-    const status = $("g-check-status");
-    check.disabled = true; status.textContent = "Checking…";
-    try {
-      const r = await api("/api/google/check", "POST", {});
-      props = r.properties;
-      if (!props.length) { status.textContent = "Google connected, but the robot cannot see any Analytics property yet. Do step 6, then check again."; check.disabled = false; return; }
-      const done = setupDone(); done.add("access"); done.add("check"); saveSetupDone(done);
-      G = await api("/api/google/status");
-      renderAll();
-      location.hash = "#settings?google=connected";
-    } catch (err) { status.textContent = err.message; check.disabled = false; }
-  };
-  const clientForm = $("g-client");
-  if (clientForm) clientForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const status = $("g-client-status");
-    if (!$("g-id").value.trim()) { status.textContent = "Paste the Client ID first."; $("g-id").focus(); return; }
-    if (!$("g-secret").value.trim() && !G.hasClient) { status.textContent = "Paste the Client secret too."; $("g-secret").focus(); return; }
-    try {
-      G = await api("/api/google/client", "PUT", { clientId: $("g-id").value, clientSecret: $("g-secret").value });
-      renderSettings();
-      const d = box.querySelector(".dash-more-options"); if (d) d.open = true;
-      $("g-client-status").textContent = "Saved. Now click Connect Google Analytics.";
-    } catch (err) { status.textContent = err.message; }
-  };
+  bindGoogleSetup(box, renderSettings, () => { renderAll(); location.hash = "#settings?google=connected"; });
+  drawBoards($("set-boards"), (inner) => panel("Job boards", `<p class="dash-note">Where Application links looks for jobs that fit you, once a day. Turn on the boards you want.</p>${inner}`, "briefcase"));
   const disc = $("g-disconnect");
   if (disc) disc.onclick = async () => { G = await api("/api/google/disconnect", "POST", {}); props = null; renderAll(); };
 
@@ -1155,12 +1165,10 @@ function renderSettings() {
   $("leads-form").onsubmit = async (e) => {
     e.preventDefault();
     const lines = (id) => $(id).value.split("\n").map((x) => x.trim()).filter(Boolean);
-    const before = (st.leads && st.leads.extraBoards || []).join("\n");
-    st.leads = { ...LR, titles: lines("l-titles"), seniority: lines("l-seniority"), skip: lines("l-skip"), locations: lines("l-locations"), payFloor: Number($("l-floor").value) || 0, postedWithinDays: Number($("l-days").value) || 0, minWarmth: Number($("l-warmth").value) || 2, connectNote: $("l-connect").value.trim() || CONNECT_NOTE, messageNote: $("l-message").value.trim() || MESSAGE_NOTE, extraBoards: lines("l-extra") };
+    st.leads = { ...LR, titles: lines("l-titles"), seniority: lines("l-seniority"), skip: lines("l-skip"), locations: lines("l-locations"), payFloor: Number($("l-floor").value) || 0, postedWithinDays: Number($("l-days").value) || 0, minWarmth: Number($("l-warmth").value) || 2, connectNote: $("l-connect").value.trim() || CONNECT_NOTE, messageNote: $("l-message").value.trim() || MESSAGE_NOTE };
     await save("settings", st);
     $("leads-form-status").textContent = "Saved.";
     renderNav(); renderLeads();
-    if (st.leads.extraBoards.join("\n") !== before) { $("leads-form-status").textContent = "Saved. Reading the new job boards…"; try { await api("/api/leads/refresh", "POST", {}); S.leads = (await loadAll()).leads; renderNav(); renderLeads(); $("leads-form-status").textContent = "Saved and checked."; } catch (err) { $("leads-form-status").textContent = err.message; } }
   };
   $("filter-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -1173,6 +1181,233 @@ function renderSettings() {
     st.pageNames = Object.fromEntries($("x-pages").value.split("\n").map((x) => x.split("|").map((y) => y.trim())).filter(([k, v]) => k && v).map(([k, v]) => [k.toLowerCase().replace(/^\/+|\/+$/g, ""), v]));
     await save("settings", st);
     $("filter-status").textContent = "Saved. The next check uses these.";
+  };
+}
+
+// Copy buttons next to codes and addresses.
+function bindCopy(box) {
+  box.querySelectorAll("[data-copy]").forEach((b) => {
+    b.onclick = async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; } catch (e) { b.textContent = "Select and copy"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 2000);
+    };
+  });
+}
+
+// Wires up the Google setup steps wherever they show: Settings, or the first-run questions.
+// rerender draws the steps again; onConnected runs once Google answers with a property.
+function bindGoogleSetup(box, rerender, onConnected) {
+  bindCopy(box);
+  box.querySelectorAll("[data-step]").forEach((b) => { b.onclick = () => { openStep = openStep === b.dataset.step && b.getAttribute("aria-expanded") === "true" ? "__none" : b.dataset.step; rerender(); const again = box.querySelector(`[data-step="${b.dataset.step}"]`); if (again) again.focus(); }; });
+  box.querySelectorAll("[data-step-done]").forEach((b) => {
+    b.onclick = () => {
+      const done = setupDone(); done.add(b.dataset.stepDone); saveSetupDone(done);
+      const steps = setupSteps(); const i = steps.findIndex((x) => x.id === b.dataset.stepDone);
+      openStep = (steps.slice(i + 1).find((x) => !done.has(x.id)) || steps[steps.length - 1]).id;
+      rerender();
+      const next = box.querySelector(`[data-step="${openStep}"]`); if (next) next.focus();
+    };
+  });
+  const saForm = box.querySelector("#g-sa");
+  if (saForm) saForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const status = $("g-sa-status");
+    const file = $("g-sa-file").files[0];
+    if (!file) { status.textContent = "Choose the .json file first."; $("g-sa-file").focus(); return; }
+    let key;
+    try { key = JSON.parse(await file.text()); } catch (err) { status.textContent = "That file is not the key. Choose the .json file Google downloaded."; return; }
+    try {
+      G = await api("/api/google/service-account", "PUT", key);
+      const done = setupDone(); ["project", "apis", "robot", "key", "upload"].forEach((id) => done.add(id)); saveSetupDone(done);
+      openStep = "access";
+      rerender();
+      const next = box.querySelector('[data-step="access"]'); if (next) next.focus();
+    } catch (err) { status.textContent = err.message; }
+  };
+  const check = box.querySelector("#g-check");
+  if (check) check.onclick = async () => {
+    const status = $("g-check-status");
+    check.disabled = true; status.textContent = "Checking…";
+    try {
+      const r = await api("/api/google/check", "POST", {});
+      props = r.properties;
+      if (!props.length) { status.textContent = "Google connected, but the robot cannot see any Analytics property yet. Do step 6, then check again."; check.disabled = false; return; }
+      const done = setupDone(); done.add("access"); done.add("check"); saveSetupDone(done);
+      G = await api("/api/google/status");
+      await onConnected(r);
+    } catch (err) { status.textContent = err.message; check.disabled = false; }
+  };
+  const clientForm = box.querySelector("#g-client");
+  if (clientForm) clientForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const status = $("g-client-status");
+    if (!$("g-id").value.trim()) { status.textContent = "Paste the Client ID first."; $("g-id").focus(); return; }
+    if (!$("g-secret").value.trim() && !G.hasClient) { status.textContent = "Paste the Client secret too."; $("g-secret").focus(); return; }
+    try {
+      G = await api("/api/google/client", "PUT", { clientId: $("g-id").value, clientSecret: $("g-secret").value });
+      rerender();
+      const d = box.querySelector(".dash-more-options"); if (d) d.open = true;
+      $("g-client-status").textContent = "Saved. Now click Connect Google Analytics.";
+    } catch (err) { status.textContent = err.message; }
+  };
+}
+
+/* ---------- Job boards ---------- */
+// Which job boards Application links checks: the common ones with an on and off switch, and boards you
+// add. Each shows a light: green, the app can check it; amber, it needs something from you;
+// red, the app cannot check that website. Used in Settings and in the setup questions.
+
+const LIGHT = { ok: "Can check", warn: "Needs you", failed: "Last check failed", bad: "Cannot check" };
+const leadsSettings = () => { S.settings.leads = { ...LEAD_DEFAULTS, ...(S.settings.leads || {}) }; return S.settings.leads; };
+const sourceOf = (id) => ((S.leads && S.leads.sources) || []).find((x) => x.id === id);
+const lastChecked = () => (S.leads && S.leads.checkedAt ? dot(new Date(S.leads.checkedAt).toISOString().slice(0, 10)) : "");
+const COMPANY_ATS = ["greenhouse", "lever", "ashby", "workday"];
+// Companies whose job board the app can read, from your applications and the boards you added.
+const companyBoardCount = () => new Set([
+  ...S.applications.filter((a) => COMPANY_ATS.includes(atsOfUrl(a.jobUrl || ""))).map((a) => companyKey(a.company)),
+  ...((S.settings.leads || {}).customBoards || []).filter((c) => c.kind === "company" && c.on !== false).map((c) => companyKey(c.name))
+].filter(Boolean)).size;
+function boardsOnCount() {
+  const L = S.settings.leads || {};
+  return BOARDS.filter((b) => boardOn(L, b.id) && !(b.needsKey && !(BK[b.id] || {}).saved)).length + (L.customBoards || []).filter((c) => c.on !== false && c.kind !== "none" && c.status !== "error").length;
+}
+
+// [light, message] for a board in the list.
+function boardLight(b) {
+  if (b.can === "error") return ["bad", `You cannot check this website. ${esc(b.why)} ${linkOn(S.settings.leads, b.id) ? "Its search link is on Application links, so you can check it yourself." : "Turn it on for a search link on Application links, so you can check it yourself."}`];
+  if (b.needsKey && !(BK[b.id] || {}).saved) return ["warn", `${esc(b.note)} ${esc(b.needs)}`];
+  if (b.id === "company") {
+    const n = S.leads ? S.leads.companies : companyBoardCount();
+    if (!n) return ["warn", "Needs a job link. Add the jobs you applied to with their posting links, or add a company's job board below. Greenhouse, Lever, Ashby and Workday work."];
+    const src = sourceOf("company");
+    return ["ok", `${esc(b.note)} ${n} ${n === 1 ? "company" : "companies"}${src ? `, ${src.jobs} design ${src.jobs === 1 ? "job" : "jobs"} on the last check, ${lastChecked()}` : ""}.`];
+  }
+  const src = boardOn(S.settings.leads, b.id) ? sourceOf(b.id) : null;
+  if (src && !src.ok) return [src.needs ? "warn" : "failed", `${esc(b.note)} The last check did not work: ${esc(src.message)} It tries again on the next check.`];
+  return ["ok", `${esc(b.note)}${src ? ` ${src.jobs} design ${src.jobs === 1 ? "job" : "jobs"} on the last check, ${lastChecked()}.` : ""}`];
+}
+function customLight(c) {
+  if (c.status === "error") return ["bad", esc(c.message)];
+  const src = c.on !== false ? sourceOf(c.id) : null;
+  if (src && !src.ok) return ["failed", `The last check did not work: ${esc(src.message)} It tries again on the next check.`];
+  return [c.status === "ok" ? "ok" : "warn", `${esc(c.message)}${src ? ` ${src.jobs} design ${src.jobs === 1 ? "job" : "jobs"} on the last check, ${lastChecked()}.` : ""}`];
+}
+
+function boardRow({ id, name, site, light, on, canSwitch, extra = "", custom = false }) {
+  const [tone, msg] = light;
+  const dotTone = tone === "failed" ? "warn" : tone;
+  return `<li class="dash-board">
+    <span class="dash-dot dash-dot--${dotTone}" aria-hidden="true"></span>
+    <div class="dash-board__main">
+      <div class="dash-board__top"><label class="dash-board__name" for="b-on-${esc(id)}">${esc(name)}</label><span class="dash-board__state dash-board__state--${dotTone}">${LIGHT[tone]}</span></div>
+      <p class="dash-note" id="b-msg-${esc(id)}">${msg}${site && safeUrl(site) ? ` <a class="dash-board__visit" href="${esc(safeUrl(site))}" target="_blank" rel="noopener noreferrer">Visit${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> ${esc(name)} (opens in a new tab)</span></a>` : ""}</p>
+      ${extra}
+      ${custom ? `<div><button type="button" class="dash-rowbtn" data-b-remove="${esc(id)}">Remove</button></div>` : ""}
+    </div>
+    <input type="checkbox" role="switch" class="dash-switch" id="b-on-${esc(id)}" data-b-on="${esc(id)}"${on && canSwitch ? " checked" : ""}${canSwitch ? "" : " disabled"} aria-describedby="b-msg-${esc(id)}">
+  </li>`;
+}
+
+const COUNTRIES = [["us", "United States"], ["gb", "United Kingdom"], ["ca", "Canada"], ["au", "Australia"], ["de", "Germany"], ["fr", "France"], ["nl", "Netherlands"], ["in", "India"]];
+function keyFields(b) {
+  const k = BK[b.id] || {};
+  if (k.saved) return `<p class="dash-note">Key saved, searching ${esc((COUNTRIES.find((c) => c[0] === k.country) || ["", k.country])[1])}. <button type="button" class="dash-rowbtn" data-b-key-remove="${b.id}">Remove the key</button></p>`;
+  return `<div class="dash-board__keys">
+    <div class="dash-form-grid">
+      ${field(`b-${b.id}-id`, "App ID", input(`b-${b.id}-id`, "", "text", 'autocomplete="off" spellcheck="false"'))}
+      ${field(`b-${b.id}-key`, "App key", input(`b-${b.id}-key`, "", "password", 'autocomplete="off"'))}
+      ${field(`b-${b.id}-country`, "Country to search", select(`b-${b.id}-country`, "us", COUNTRIES))}
+    </div>
+    <div class="dash-inline"><a class="dash-fix" href="https://developer.adzuna.com/signup" target="_blank" rel="noopener noreferrer">Get a free key${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (opens in a new tab)</span></a><button type="button" class="sdc-btn" data-b-key-save="${b.id}">Save the key</button><span class="dash-note" id="b-${b.id}-status" role="status" aria-live="polite"></span></div>
+  </div>`;
+}
+
+function boardsHtml() {
+  const L = leadsSettings();
+  const rows = BOARDS.map((b) => boardRow({
+    id: b.id, name: b.name, site: b.site, light: boardLight(b), on: b.can === "error" ? linkOn(L, b.id) : boardOn(L, b.id),
+    canSwitch: (b.can !== "error" || !!b.search) && !(b.needsKey && !(BK[b.id] || {}).saved),
+    extra: b.needsKey ? keyFields(b) : ""
+  }));
+  const mine = (L.customBoards || []).map((c) => boardRow({
+    id: c.id, name: c.name, site: c.url, light: customLight(c), on: c.on !== false,
+    canSwitch: c.status !== "error" && c.kind !== "none", custom: true
+  }));
+  return `<ul class="dash-boards">${rows.join("")}</ul>
+    ${mine.length ? `<h4 class="dash-boards__head">Boards you added</h4><ul class="dash-boards">${mine.join("")}</ul>` : ""}
+    <form class="dash-board-add" id="b-add" novalidate>
+      <h4 class="dash-boards__head">Add a job board</h4>
+      <div class="dash-form-grid">
+        ${field("b-name", "Name", input("b-name", "", "text", 'placeholder="Example: Design Jobs Board" autocomplete="off"'))}
+        ${field("b-url", "Link", input("b-url", "", "url", 'placeholder="https://" autocomplete="off"'), { hint: "A job board's page or feed, or a company's careers page. The app checks it right away." })}
+      </div>
+      <div class="dash-inline"><button type="submit" class="sdc-btn">${icon("plus", "dash-icon--sm")}Add and check it</button><span class="dash-note" id="b-add-status" role="status" aria-live="polite"></span></div>
+    </form>`;
+}
+
+// Draws the board list into el, wrapped by frame(inner), and wires it up. Only this block redraws,
+// so other unsaved fields on the page are left alone.
+function drawBoards(el, frame = (x) => x, focusId) {
+  if (!el) return;
+  el.innerHTML = frame(boardsHtml());
+  const L = leadsSettings();
+  const redraw = (fid, msg) => { drawBoards(el, frame, fid); if (msg && $("b-add-status")) $("b-add-status").textContent = msg; };
+  const keep = async () => { await save("settings", S.settings); renderNav(); renderLeads(); };
+  if (focusId && $(focusId)) $(focusId).focus();
+
+  el.querySelectorAll("[data-b-on]").forEach((sw) => {
+    sw.onchange = async () => {
+      const id = sw.dataset.bOn;
+      const c = (L.customBoards || []).find((x) => x.id === id);
+      if (c) c.on = sw.checked; else L.boards = { ...(L.boards || {}), [id]: sw.checked };
+      await keep();
+      redraw(sw.id);
+    };
+  });
+  el.querySelectorAll("[data-b-remove]").forEach((b) => {
+    b.onclick = async () => { L.customBoards = (L.customBoards || []).filter((x) => x.id !== b.dataset.bRemove); await keep(); redraw("b-name", "Removed."); };
+  });
+  el.querySelectorAll("[data-b-key-save]").forEach((b) => {
+    b.onclick = async () => {
+      const id = b.dataset.bKeySave, status = $(`b-${id}-status`);
+      if (!$(`b-${id}-id`).value.trim() || !$(`b-${id}-key`).value.trim()) { status.textContent = "Paste both the app ID and the app key."; return; }
+      b.disabled = true; status.textContent = "Checking the key with Adzuna…";
+      try {
+        BK = await api("/api/boards/keys", "PUT", { board: id, appId: $(`b-${id}-id`).value, appKey: $(`b-${id}-key`).value, country: $(`b-${id}-country`).value });
+        L.boards = { ...(L.boards || {}), [id]: true };
+        await keep();
+        redraw(`b-on-${id}`);
+      } catch (err) { status.textContent = err.message; b.disabled = false; }
+    };
+  });
+  el.querySelectorAll("[data-b-key-remove]").forEach((b) => {
+    b.onclick = async () => {
+      const id = b.dataset.bKeyRemove;
+      try { BK = await api("/api/boards/keys", "PUT", { board: id, appId: "", appKey: "" }); } catch (err) { return; }
+      L.boards = { ...(L.boards || {}), [id]: false };
+      await keep();
+      redraw(`b-${id}-id`);
+    };
+  });
+  const form = el.querySelector("#b-add");
+  if (form) form.onsubmit = async (e) => {
+    e.preventDefault();
+    form.querySelectorAll(".sdc-field__error").forEach((p) => { p.hidden = true; });
+    const url = $("b-url").value.trim();
+    const err = (id, msg) => { const p = $(`${id}-err`); p.textContent = msg; p.hidden = false; $(id).focus(); };
+    if (!/^https:\/\//i.test(url)) return err("b-url", "Paste the full link, starting with https://");
+    if ((L.customBoards || []).some((c) => c.url === url)) return err("b-url", "That board is already on the list.");
+    let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (x) { return err("b-url", "That is not a web address."); }
+    const name = $("b-name").value.trim() || host;
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true; $("b-add-status").textContent = "Checking the link…";
+    try {
+      const r = await api("/api/boards/test", "POST", { url });
+      const c = { id: uniqueId(`my-${slugify(name)}`, L.customBoards || []), name, url, kind: r.kind, feedUrl: r.feedUrl || "", status: r.status, message: r.message, on: r.status !== "error" && r.kind !== "none", added: new Date().toISOString() };
+      L.customBoards = [...(L.customBoards || []), c];
+      await keep();
+      redraw(`b-on-${c.id}`, `${LIGHT[r.status === "error" ? "bad" : r.status]}: ${name}. ${r.message}`);
+    } catch (x) { $("b-add-status").textContent = x.message; btn.disabled = false; }
   };
 }
 
@@ -1221,111 +1456,330 @@ async function refresh() {
 }
 
 /* ---------- First run ---------- */
-// Shown once, on a fresh install: who you are, the jobs you want, your websites, then Google.
+// A fresh install asks the questions setup needs, one screen at a time, and ends set up:
+// you, the jobs you want, your websites, Google Analytics, and the jobs you applied to.
+// Each answer is saved by the app as you go, so closing the window, even an Incognito one,
+// picks up where you left off.
 
 const MACHINE_CITIES = ["Ashburn", "Boardman", "Des Moines", "Moses Lake", "North Charleston", "Reston", "Manassas", "Flint Hill", "Council Bluffs", "Frankfurt am Main"];
 const MACHINE_SCREENS = ["800x600", "1024x1024", "2000x2000", "1920x10000"];
 const SPAM = ["considerin.net", "sunblog.asia", "osdzc.com", "sgyba.com", "giapeto.com", "alhea.com", "scirus.com", "exactseek.com", "youdao.com", "nxztkj.com"];
 const TZ_CHOICES = () => [...new Set([LOCAL_TZ, "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix", "America/Los_Angeles", "Europe/London", "UTC"])].map((z) => [z, z.replace(/_/g, " ")]);
 
-function freshSettings(w) {
-  const city = (w.city || "").trim();
-  const cityName = city.split(",")[0].trim();
-  const host = (x) => x.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "").toLowerCase();
-  const sites = w.sites.map(host).filter(Boolean).map((h) => {
-    const bare = h.replace(/^www\./, "");
-    return { id: slugify(bare), name: bare, role: "", propertyId: "", propertyName: "", timeZoneOverride: "", hosts: [bare, `www.${bare}`], notes: [], health: {} };
-  });
+// The settings a fresh install starts from. onboarded turns true on the last screen.
+function blankSettings() {
   return {
-    version: 1, onboarded: true,
-    profile: { name: w.name.trim(), pitch: w.pitch.trim(), homeCity: city },
-    displayTimeZone: w.tz || LOCAL_TZ,
-    sites,
-    exclude: { ownPlaces: city ? [city] : [], ownScreens: [], ownHosts: ["localhost", "127.0.0.1"], ownReferrers: [], machineCities: MACHINE_CITIES, machineScreens: MACHINE_SCREENS, machinePairs: [], spamReferrers: SPAM },
+    version: 1, onboarded: false, setup: { at: "welcome", google: [] },
+    profile: { name: "", pitch: "", homeCity: "" },
+    displayTimeZone: LOCAL_TZ, sites: [],
+    exclude: { ownPlaces: [], ownScreens: [], ownHosts: ["localhost", "127.0.0.1"], ownReferrers: [], machineCities: MACHINE_CITIES, machineScreens: MACHINE_SCREENS, machinePairs: [], spamReferrers: SPAM },
     scoring: { windowDays: 60, strongHours: 2, timingHours: 24 },
     autoPullHours: 6,
-    leads: { ...LEAD_DEFAULTS, titles: w.titles, seniority: w.seniority, skip: ["manager", "director", "head of", "vice president", "intern", "junior", "associate"], locations: w.locations, payFloor: Number(w.floor) || 0 }
+    leads: { ...LEAD_DEFAULTS, skip: ["manager", "director", "head of", "vice president", "intern", "junior", "associate"] }
   };
 }
 
-const W = { step: 0, name: "", city: "", tz: LOCAL_TZ, pitch: "", titles: ["product designer", "design systems"], seniority: ["principal", "staff", "lead", "senior"], locations: ["remote"], floor: "", sites: [""] };
 const linesOf = (id) => $(id).value.split(/\n|,/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+const hostOf = (x) => String(x).trim().replace(/^https?:\/\//i, "").replace(/[/?#].*$/, "").toLowerCase().replace(/^www\./, "");
+const isConnected = () => !!(G.connected && props && props.length);
+// A property whose name holds the site's address, as a first guess.
+const guessProp = (site) => ((props || []).find((p) => String(p.name).toLowerCase().includes(site.name)) || {}).id || "";
+let welcomeNote = "";  // a line for the next screen, like how many applications were added
+let welcomeLinks = ""; // links that could not be read, put back in the box
 
 function welcomeSteps() {
+  const st = S.settings || blankSettings();
+  const L = st.leads;
+  const city = (st.profile.homeCity || "").split(",")[0].trim().toLowerCase();
+  const pick = (name, value, current, label, sub) => `<label class="dash-pick"><input type="radio" name="${name}" value="${value}"${current === value ? " checked" : ""}><span><b>${label}</b><span class="dash-sub">${sub}</span></span></label>`;
+  const links = (list) => `<div class="dash-inline">${list.map(([l, u]) => `<a class="dash-fix" href="${u}" target="_blank" rel="noopener noreferrer">${esc(l)}${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (opens in a new tab)</span></a>`).join("")}</div>`;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
   return [
-    { title: "Welcome to Designer Job Search", body: `
-      <p>Designer Job Search watches who reads your portfolio and helps you act on it.</p>
-      <ul class="dash-iconlist">
-        <li>${tile("pull")}<div><h3>Which applications reached a person</h3><p>It matches your website's visits to the jobs you applied to, and estimates who looked and when.</p></div></li>
-        <li>${tile("warm")}<div><h3>Jobs that fit, and who to contact</h3><p>It checks companies' own job boards every day and suggests someone to reach out to about each match.</p></div></li>
-        <li>${tile("eyeoff")}<div><h3>It stays on this computer</h3><p>Your data lives here. The app only reads your Google Analytics and public job boards, and never sends anything for you.</p></div></li>
-      </ul>
-      <p class="dash-note">Setup takes about 15 minutes. Everything here can be changed later in Settings.</p>`, next: "Get started" },
-    { title: "About you", body: `
-      <div class="dash-form-grid">
-        ${field("w-name", "Your first name", input("w-name", W.name, "text", 'autocomplete="given-name"'), { hint: "Signs your outreach notes." })}
-        ${field("w-city", "Your city and state", input("w-city", W.city, "text", 'placeholder="Springfield, Illinois"'), { hint: "Spell the state out, the way Google Analytics does. Your own visits from here are left out." })}
-        ${field("w-tz", "Your time zone", select("w-tz", W.tz, TZ_CHOICES()))}
-        ${field("w-pitch", "One line about your work", textarea("w-pitch", W.pitch), { span: true, hint: "Goes into your outreach notes. Example: I am a product designer who builds design systems." })}
-      </div>`, read: () => { W.name = $("w-name").value; W.city = $("w-city").value; W.tz = $("w-tz").value; W.pitch = $("w-pitch").value; if (!W.name.trim()) return { "w-name": "Add your first name." }; } },
-    { title: "The jobs you want", body: `
-      <p class="dash-note">Used to pick job matches. One per line.</p>
-      <div class="dash-form-grid">
-        ${field("w-titles", "Job titles", textarea("w-titles", W.titles.join("\n")), { hint: "A job shows if its title has any of these." })}
-        ${field("w-seniority", "Seniority", textarea("w-seniority", W.seniority.join("\n")), { hint: "The title must have one of these words." })}
-        ${field("w-locations", "Locations that work", textarea("w-locations", (W.locations.length > 1 ? W.locations : ["remote", (W.city.split(",")[0] || "").trim().toLowerCase()].filter(Boolean)).join("\n")), { hint: "Remote, and your city if you would go in." })}
-        ${field("w-floor", "Lowest yearly pay you would take", input("w-floor", W.floor, "number", 'min="0" step="1000" placeholder="Optional"'), { hint: "Posted pay under this is flagged, never hidden. Pay is never guessed." })}
-      </div>`, read: () => { W.titles = linesOf("w-titles"); W.seniority = linesOf("w-seniority"); W.locations = linesOf("w-locations"); W.floor = $("w-floor").value; if (!W.titles.length) return { "w-titles": "Add at least one job title." }; } },
-    { title: "Your websites", body: `
-      <p>The websites you send to employers: a portfolio, a clips page, a Substack. Each needs Google Analytics on it.</p>
-      ${field("w-sites", "Website addresses", textarea("w-sites", W.sites.join("\n")), { span: true, hint: "One per line. Example: yourname.com" })}`, read: () => { W.sites = $("w-sites").value.split("\n").map((x) => x.trim()).filter(Boolean); if (!W.sites.length) return { "w-sites": "Add at least one website." }; } },
-    { title: "Connect Google Analytics", body: `
-      <p>Last step: let the app read your Google Analytics. It takes about 10 minutes, once, and a page walks you through every click.</p>
-      <ul class="dash-list">
-        <li>You make a read-only "robot" login in Google Cloud and give its key to this app.</li>
-        <li>After that, new visits come in on their own every few hours.</li>
-        <li>Then add the jobs you applied to under <b>Applications</b>. Paste a job link and the details fill in.</li>
-      </ul>`, next: "Set up Google Analytics", alt: "Explore first" }
+    { id: "welcome", title: "Welcome to Designer Job Search", next: "Start",
+      body: () => `
+        <p>Designer Job Search watches who reads your portfolio and helps you act on it.</p>
+        <ul class="dash-iconlist">
+          <li>${tile("pull")}<div><h3>Which applications reached a person</h3><p>It matches your website's visits to the jobs you applied to, and estimates who looked and when.</p></div></li>
+          <li>${tile("warm")}<div><h3>Jobs that fit, and who to contact</h3><p>It checks companies' own job boards every day and suggests someone to reach out to about each match.</p></div></li>
+          <li>${tile("eyeoff")}<div><h3>It stays on this computer</h3><p>Your data lives here. The app only reads your Google Analytics and public job boards, and never sends anything for you.</p></div></li>
+        </ul>
+        <p>Answer a few questions and the app sets itself up. It takes about 15 minutes, most of it connecting Google Analytics. Your answers save as you go, so you can stop and pick up later.</p>
+        <label class="dash-agree"><input type="checkbox" id="w-terms" name="w-terms"${S.settings && S.settings.terms ? " checked" : ""}><span>I have read and agree to the <button type="button" class="dash-linkbtn" data-show="terms">terms of use</button>. I understand that matches are estimates, that job listings come from other websites, and that the app comes with no warranty.</span></label>
+        <p class="sdc-field__error" id="w-terms-err" hidden></p>`,
+      check: () => ($("w-terms").checked ? null : { "w-terms": "Check the box to agree to the terms of use before you start." }),
+      go: async () => {
+        if (!S.settings) S.settings = blankSettings();
+        S.settings.terms = { version: TERMS_VERSION, acceptedAt: new Date().toISOString() };
+      } },
+
+    { id: "you", title: "What should we call you?",
+      body: () => `<div class="dash-form-grid">
+        ${field("w-name", "Your first name", input("w-name", st.profile.name, "text", 'autocomplete="given-name"'), { req: true, hint: "Signs the outreach notes the app writes for you." })}
+        ${field("w-pitch", "One line about your work", textarea("w-pitch", st.profile.pitch), { span: true, hint: "Goes into those notes too. Example: I design payments products and the design systems behind them." })}
+      </div>`,
+      keep: () => { st.profile.name = $("w-name").value.trim(); st.profile.pitch = $("w-pitch").value.trim(); },
+      check: () => (st.profile.name ? null : { "w-name": "Add your first name." }) },
+
+    { id: "place", title: "Where do you live?",
+      body: () => `<div class="dash-form-grid">
+        ${field("w-city", "City and state", input("w-city", st.profile.homeCity, "text", 'placeholder="Springfield, Illinois" autocomplete="off"'), { hint: "Spell the state out, the way Google Analytics does. Your own visits from here are left out, so you never count as a reader." })}
+        ${field("w-tz", "Time zone", select("w-tz", st.displayTimeZone || LOCAL_TZ, TZ_CHOICES()), { hint: "Visit times show in this zone." })}
+      </div>`,
+      keep: () => { const c = $("w-city").value.trim(); st.profile.homeCity = c; st.exclude.ownPlaces = c ? [c] : []; st.displayTimeZone = $("w-tz").value; },
+      check: () => (st.profile.homeCity && !st.profile.homeCity.includes(",") ? { "w-city": "Add the state after a comma. Example: Springfield, Illinois." } : null) },
+
+    { id: "jobs", title: "What jobs are you looking for?",
+      body: () => `<p class="dash-note">The app uses these to pick job matches from company job boards. One per line.</p>
+        <div class="dash-form-grid">
+          ${field("w-titles", "Job titles", textarea("w-titles", L.titles.join("\n")), { hint: "A job shows when its title has any of these." })}
+          ${field("w-seniority", "Seniority", textarea("w-seniority", L.seniority.join("\n")), { hint: "The title must also have one of these words." })}
+        </div>`,
+      keep: () => { L.titles = linesOf("w-titles"); L.seniority = linesOf("w-seniority"); },
+      check: () => (!L.titles.length ? { "w-titles": "Add at least one job title." } : !L.seniority.length ? { "w-seniority": "Add at least one, like senior." } : null) },
+
+    { id: "terms", title: "Where would you work, and for how much?",
+      body: () => {
+        const places = st.setup.termsSeen || !city ? L.locations : [...new Set([...L.locations, city])];
+        return `<div class="dash-form-grid">
+          ${field("w-locations", "Places that work", textarea("w-locations", places.join("\n")), { hint: "One per line. Remote, and your city if you would go in." })}
+          ${field("w-floor", "Lowest yearly pay you would take", input("w-floor", L.payFloor ? String(L.payFloor) : "", "number", 'min="0" step="1000" placeholder="Optional"'), { hint: "Jobs that post less are flagged, never hidden. Pay is never guessed." })}
+        </div>`;
+      },
+      keep: () => { L.locations = linesOf("w-locations"); L.payFloor = Number($("w-floor").value) || 0; st.setup.termsSeen = true; } },
+
+    { id: "boards", title: "Which job boards should the app check?", noForm: true,
+      body: () => `<p>Once a day, the app looks on these boards for jobs that fit what you just told it. A green light means it can check the board, and amber means it needs something from you. Red means it cannot check that website, but you can turn it on for a search link to check it yourself.</p><div id="w-boards"></div>`,
+      onShow: () => drawBoards($("w-boards")) },
+
+    { id: "sites", title: "Which websites do you send to employers?",
+      body: () => `<p>Your portfolio, a case study site, a Substack: anywhere a hiring manager might look you up.</p>
+        ${field("w-sites", "Website addresses", textarea("w-sites", st.sites.map((x) => x.name).join("\n")), { span: true, hint: "One per line. Example: yourname.com" })}`,
+      keep: () => {
+        const hosts = [...new Set($("w-sites").value.split(/\n|,/).map(hostOf).filter(Boolean))];
+        st.sites = hosts.map((h) => st.sites.find((x) => x.name === h) || { id: uniqueId(slugify(h), st.sites), name: h, role: "", propertyId: "", propertyName: "", timeZoneOverride: "", hosts: [h, `www.${h}`], notes: [], health: {} });
+      },
+      check: () => (st.sites.length ? null : { "w-sites": "Add at least one website." }) },
+
+    { id: "ga", title: "Is Google Analytics on those websites?",
+      body: () => {
+        const v = st.setup.ga || "";
+        return `<p>The app reads visits from Google Analytics, so it has to be on your sites.</p>
+          <fieldset class="dash-pickset"><legend class="sdc-u-sr-only">Is Google Analytics on your websites?</legend>
+            ${pick("w-ga", "yes", v, "Yes", "Each site has a Google Analytics 4 property.")}
+            ${pick("w-ga", "no", v, "No, or only on some", "This shows how to add it.")}
+            ${pick("w-ga", "unsure", v, "I am not sure", "This shows how to check.")}
+          </fieldset>
+          <p class="sdc-field__error" id="w-ga-err" hidden></p>
+          <div class="dash-callout" id="w-ga-no"${v === "no" ? "" : " hidden"}>
+            <p><b>Add Google Analytics to each site.</b></p>
+            <ol class="dash-steps-list">
+              <li>In Google Analytics, click <b>Admin</b>, then <b>Create</b>, then <b>Property</b>, and follow the steps for your website.</li>
+              <li>Choose <b>Web</b> and type the site's address. Google gives you a code that starts with <b>G-</b>.</li>
+              <li>Paste that code into your site builder's Google Analytics setting. Squarespace, Wix, Webflow, Framer and WordPress all have one.</li>
+            </ol>
+            ${links([["Google's setup guide", "https://support.google.com/analytics/answer/9304153"], ["Open Google Analytics", "https://analytics.google.com/analytics/web/"]])}
+            <p class="dash-note">You can keep going now. Applications and job matches work without it, and visits start showing once it is on.</p>
+          </div>
+          <div class="dash-callout" id="w-ga-unsure"${v === "unsure" ? "" : " hidden"}>
+            <p><b>Here is how to check.</b></p>
+            <ol class="dash-steps-list">
+              <li>Open Google Analytics and sign in with the Google account you use for your website.</li>
+              <li>Click the name at the top left. If you see a property named for your website, it is on. Choose Yes.</li>
+              <li>If there is no property, or Google asks you to start setting one up, it is not on yet. Choose No.</li>
+            </ol>
+            ${links([["Open Google Analytics", "https://analytics.google.com/analytics/web/"]])}
+          </div>`;
+      },
+      onShow: (form) => form.addEventListener("change", (e) => {
+        if (e.target.name !== "w-ga") return;
+        $("w-ga-err").hidden = true;
+        $("w-ga-no").hidden = e.target.value !== "no";
+        $("w-ga-unsure").hidden = e.target.value !== "unsure";
+      }),
+      keep: () => { const c = document.querySelector('input[name="w-ga"]:checked'); st.setup.ga = c ? c.value : ""; },
+      check: () => (st.setup.ga ? null : { "w-ga": "Choose one." }) },
+
+    { id: "google", title: "Let the app read your Google Analytics", noForm: true,
+      body: () => isConnected()
+        ? `<p><span class="dash-chip dash-chip--ok">Connected</span> ${G.mode === "service" ? `with the robot account <b>${esc(G.serviceEmail)}</b>` : "with your Google sign-in"}. It can see ${plural(props.length, "property", "properties")}.</p>`
+        : `${st.setup.ga === "no" ? '<p class="dash-note">Google Analytics is not on your sites yet, so you can skip this for now and finish it later in Settings.</p>' : ""}${setupHtml()}`,
+      alt: () => (isConnected() ? "" : "Skip for now"),
+      check: () => (isConnected() ? null : { _: "Not connected yet. Finish the steps above, or choose Skip for now." }),
+      onShow: (form, box) => bindGoogleSetup(box, renderWelcome, async () => { await moveTo(stepAfter("google")); }) },
+
+    { id: "props", title: "Which Google Analytics property is each website?", skip: () => !isConnected(),
+      body: () => `<p class="dash-note">The list shows what the app can read. If a site's property is missing, add the robot to it as a Viewer (step 6 on the screen before), then come back.</p>
+        <div class="dash-form-grid">${st.sites.map((x, i) => field(`w-prop-${i}`, x.name, select(`w-prop-${i}`, x.propertyId || guessProp(x), [["", "Not on this list yet"], ...(props || []).map((p) => [p.id, `${p.name} (${p.id})`])]))).join("")}</div>`,
+      keep: () => st.sites.forEach((x, i) => {
+        const v = $(`w-prop-${i}`).value;
+        if (v !== x.propertyId) { x.propertyId = v; x.propertyName = v ? ((props || []).find((p) => p.id === v) || {}).name || "" : ""; x.health = {}; }
+      }) },
+
+    { id: "apps", title: "Have you applied to any jobs yet?",
+      body: () => `<p>The app matches each visit to the jobs you applied to. Add the ones you have so far. You can add more any time under Applications.</p>
+        ${welcomeNote ? `<p class="sdc-form-status sdc-form-status--ok">${esc(welcomeNote)}</p>` : ""}
+        <div class="dash-form-grid">
+          ${field("w-links", "Job posting links", textarea("w-links", welcomeLinks), { span: true, hint: "One per line. The app reads the company, role and places from each posting." })}
+          ${field("w-applied", "When you applied to these", input("w-applied", localNow().date, "date"), { hint: "Fix a single date later under Applications." })}
+        </div>
+        <details class="dash-more-options"><summary>Or paste a spreadsheet (CSV)</summary>
+          ${field("w-csv", "CSV rows", textarea("w-csv", ""), { span: true, hint: "First row is the header. Columns: company, role, submitted (YYYY-MM-DD), jobUrl, places, status, req." })}
+        </details>
+        <p class="dash-note">${plural(S.applications.length, "application", "applications")} on file so far. Leave the boxes empty to skip.</p>`,
+      go: async () => {
+        const urls = [...new Set($("w-links").value.split(/\s+/).map((x) => x.trim()).filter((x) => /^https?:\/\//i.test(x)))];
+        const csv = $("w-csv").value.trim();
+        if (!urls.length && !csv) return null;
+        // The same links that could not be read last time: move on instead of trying again.
+        if (!csv && welcomeLinks && $("w-links").value.trim() === welcomeLinks.trim()) return null;
+        const date = $("w-applied").value || localNow().date;
+        let added = 0;
+        const failed = [];
+        for (const [i, url] of urls.entries()) {
+          $("w-status").textContent = `Reading posting ${i + 1} of ${urls.length}…`;
+          if (S.applications.some((a) => a.jobUrl === url)) continue;
+          try {
+            const j = await api("/api/job", "POST", { url });
+            if (!j.company || !j.role) { failed.push(url); continue; }
+            S.applications.push({ id: uniqueId(slugify(`${j.company}-${j.role}`), S.applications), company: j.company, role: j.role, req: j.req || "", submitted: date, submittedTime: "", jobUrl: url, ats: j.ats || atsOfUrl(url), places: j.places || [], status: "submitted", statusDate: "", notes: "" });
+            added++;
+          } catch (err) { failed.push(url); }
+        }
+        if (csv) { const r = addAppsFromCsv(csv); if (r.error) return { errors: { "w-csv": r.error } }; added += r.added; }
+        await save("applications", S.applications);
+        welcomeLinks = failed.join("\n");
+        welcomeNote = `Added ${plural(added, "application", "applications")}.` + (failed.length ? ` ${plural(failed.length, "link", "links")} could not be read, so ${failed.length === 1 ? "it is" : "they are"} still in the box. Fix ${failed.length === 1 ? "it" : "them"}, or add ${failed.length === 1 ? "it" : "them"} under Applications later.` : "") + " Press Next to keep going.";
+        return { stay: true };
+      } },
+
+    { id: "done", title: "You are set up", next: "Open my dashboard",
+      body: () => {
+        const withProp = st.sites.filter((x) => x.propertyId);
+        const row = (good, title, text) => `<li>${good === null ? tile("clock") : good ? tile("high", "high") : tile("alert", "medium")}<div><h3>${esc(title)}</h3><p>${text}</p></div></li>`;
+        return `<ul class="dash-iconlist">
+          ${row(true, "About you", `${esc(st.profile.name)}${st.profile.homeCity ? `, ${esc(st.profile.homeCity)}. Your own visits from there are left out.` : "."}`)}
+          ${row(isConnected(), "Google Analytics", isConnected() ? `Connected. The app checks for new visits every ${st.autoPullHours || 6} hours while it runs, starting now.` : "Not connected yet. Finish it any time in Settings, Connect Google Analytics.")}
+          ${row(st.sites.length > 0 && withProp.length === st.sites.length, "Your websites", st.sites.map((x) => `${esc(x.name)}: ${x.propertyId ? `property ${esc(x.propertyId)}` : "no property yet"}`).join(" · "))}
+          ${row(S.applications.length > 0, "Applications", S.applications.length ? `${plural(S.applications.length, "application", "applications")} on file. Add more under Applications: paste a job link and the details fill in.` : "None yet. Add them under Applications: paste a job link and the details fill in.")}
+          ${row(true, "Job matches", `Jobs with ${esc(L.seniority.join(", "))} and ${esc(L.titles.join(", "))} in the title${L.locations.length ? `, in ${esc(L.locations.join(", "))}` : ""}. The app checks ${boardsOnCount()} job boards once a day. Change them in Settings, Job boards. Matches show under Application links.`)}
+          ${row(null, "Keep it running", `The app checks for new visits only while it runs. To start it each time you log in to your Mac, run this once in Terminal, in the app's folder: ${copyChip("scripts/login-item.sh install")}`)}
+        </ul>
+        <p class="dash-note">Log recruiter calls, messages and referrals under Contacts. A visit soon after one of those gets high odds.</p>`;
+      },
+      onShow: (form, box) => bindCopy(box),
+      go: async () => {
+        S.settings.onboarded = true;
+        S.settings.setup.at = "done";
+        await save("settings", S.settings);
+        welcomeNote = ""; welcomeLinks = "";
+        document.body.classList.remove("is-welcome");
+        location.hash = "#overview";
+        await start();
+        if (isConnected() && S.settings.sites.some((x) => x.propertyId)) refresh();
+        if (boardsOnCount() > 0) checkLeadsNow();
+        return { done: true };
+      } }
   ];
 }
 
-function renderWelcome() {
-  const steps = welcomeSteps();
-  const s = steps[W.step];
-  $("view-title").textContent = s.title;
-  $("view-sub").textContent = `Setup, step ${W.step + 1} of ${steps.length}`;
-  document.title = "Welcome · Designer Job Search";
-  $("c-welcome").innerHTML = `<sdc-card><div class="dash-panel dash-welcome">
-    <form id="w-form" novalidate>
-      ${s.body}
-      <p class="dash-status" id="w-status" role="status" aria-live="polite"></p>
-      <div class="dash-dialog__actions">
-        ${W.step > 0 ? '<button type="button" class="sdc-btn" id="w-back">Back</button><span class="dash-toolbar__grow"></span>' : ""}
-        ${s.alt ? `<button type="button" class="sdc-btn" id="w-alt">${s.alt}</button>` : ""}
-        <button type="submit" class="sdc-btn sdc-btn--primary">${s.next || "Next"}</button>
-      </div>
-    </form></div></sdc-card>`;
-  const form = $("w-form");
-  const go = async (dest) => {
-    S.settings = freshSettings(W);
-    await save("settings", S.settings);
-    document.body.classList.remove("is-welcome");
-    location.hash = dest;
-    start();
-  };
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    form.querySelectorAll(".sdc-field__error").forEach((p) => { p.hidden = true; });
-    const errors = s.read ? s.read() : null;
-    if (errors) { for (const [id, msg] of Object.entries(errors)) { const p = $(`${id}-err`); if (p) { p.textContent = msg; p.hidden = false; } $(id).focus(); } return; }
-    if (W.step < steps.length - 1) { W.step++; renderWelcome(); $("view-title").focus(); }
-    else await go("#settings?go=google");
-  };
-  if ($("w-back")) $("w-back").onclick = () => { if (s.read) s.read(); W.step--; renderWelcome(); $("view-title").focus(); };
-  if ($("w-alt")) $("w-alt").onclick = () => go("#overview");
-  const first = form.querySelector("input, textarea");
-  if (first && W.step > 0) first.focus();
+// The steps that apply right now: the property step only shows once Google is connected.
+const liveSteps = () => welcomeSteps().filter((x) => !(x.skip && x.skip()));
+function stepAfter(id) { const list = liveSteps(); const i = list.findIndex((x) => x.id === id); return (list[i + 1] || list[list.length - 1]).id; }
+async function moveTo(id) {
+  S.settings.setup = { ...(S.settings.setup || {}), at: id };
+  await save("settings", S.settings);
+  renderWelcome();
+  // Questions with a text box start in it; the longer screens (Google, job boards) start at the title.
+  const step = liveSteps().find((x) => x.id === id) || {};
+  const first = step.noForm ? null : $("c-welcome").querySelector('input:not([type="radio"]):not([type="file"]):not([type="checkbox"]), textarea');
+  (first || $("view-title")).focus();
 }
+
+function renderWelcome() {
+  const steps = liveSteps();
+  const at = (S.settings && S.settings.setup && S.settings.setup.at) || "welcome";
+  const i = Math.max(0, steps.findIndex((x) => x.id === at));
+  const s = steps[i];
+  $("view-title").textContent = s.title;
+  $("view-sub").textContent = s.id === "welcome" ? "Setup takes about 15 minutes" : s.id === "done" ? "Setup finished" : `Setup, step ${i} of ${steps.length - 2}`;
+  document.title = "Setup · Designer Job Search";
+  const tag = s.noForm ? "div" : "form";
+  const alt = s.alt ? s.alt() : "";
+  const box = $("c-welcome");
+  box.innerHTML = `<sdc-card><div class="dash-panel dash-welcome">
+    <${tag} id="w-form" class="dash-welcome__form"${s.noForm ? "" : " novalidate"}>
+      ${s.body()}
+      <p class="sdc-field__error" id="w-err" hidden></p>
+      <p class="dash-note" id="w-status" role="status" aria-live="polite"></p>
+      <div class="dash-dialog__actions">
+        ${i > 0 ? '<button type="button" class="sdc-btn" id="w-back">Back</button><span class="dash-toolbar__grow"></span>' : ""}
+        ${alt ? `<button type="button" class="sdc-btn" id="w-alt">${esc(alt)}</button>` : ""}
+        <button type="${s.noForm ? "button" : "submit"}" class="sdc-btn sdc-btn--primary" id="w-next">${esc(s.next || "Next")}</button>
+      </div>
+    </${tag}></div></sdc-card>`;
+  const form = $("w-form");
+
+  const showErrors = (errors) => {
+    let first = null;
+    for (const [id, msg] of Object.entries(errors)) {
+      const p = id === "_" ? $("w-err") : $(`${id}-err`);
+      if (p) { p.textContent = msg; p.hidden = false; }
+      first = first || (id === "_" ? $("w-next") : $(id) || box.querySelector(`[name="${id}"]`));
+    }
+    if (first) first.focus();
+  };
+  const advance = async () => {
+    box.querySelectorAll(".sdc-field__error").forEach((p) => { p.hidden = true; });
+    if (s.keep) s.keep();
+    const errors = s.check ? s.check() : null;
+    if (errors) { showErrors(errors); return; }
+    $("w-next").disabled = true;
+    try {
+      const r = s.go ? await s.go() : null;
+      if (r && r.done) return;
+      if (r && r.errors) { showErrors(r.errors); return; }
+      if (r && r.stay) { await save("settings", S.settings); renderWelcome(); $("view-title").focus(); return; }
+      welcomeNote = ""; welcomeLinks = "";
+      await moveTo(stepAfter(s.id));
+    } catch (err) {
+      showErrors({ _: err.message });
+    } finally {
+      if ($("w-next")) $("w-next").disabled = false;
+      if ($("w-status") && /^Reading/.test($("w-status").textContent)) $("w-status").textContent = "";
+    }
+  };
+  if (s.noForm) $("w-next").onclick = advance;
+  else form.onsubmit = (e) => { e.preventDefault(); advance(); };
+  if ($("w-back")) $("w-back").onclick = async () => { if (s.keep) s.keep(); welcomeNote = ""; welcomeLinks = ""; await moveTo(steps[i - 1].id); };
+  if ($("w-alt")) $("w-alt").onclick = async () => { if (s.keep) s.keep(); welcomeNote = ""; welcomeLinks = ""; await moveTo(stepAfter(s.id)); };
+  if (s.onShow) s.onShow(form, box);
+}
+
+/* ---------- Terms, license and the footer ---------- */
+
+function showTerms() {
+  openDialog({ title: "Terms of use", readOnly: true,
+    body: `<div class="dash-terms"><p class="dash-note">Version ${esc(TERMS_VERSION)}. ${esc(OWNER)}.</p>${TERMS.map((t) => `<h3>${esc(t.h)}</h3>${t.p.map((x) => `<p>${esc(x)}</p>`).join("")}`).join("")}</div>` });
+}
+function showLicense() {
+  openDialog({ title: "License", readOnly: true, body: `<pre class="dash-license">${esc(LICENSE)}</pre>` });
+}
+const siteLink = (label) => `<a href="${SITE}" target="_blank" rel="noopener noreferrer">${esc(label)}${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (opens in a new tab)</span></a>`;
+function renderFoot() {
+  $("foot").innerHTML = `<span>Designer Job Search ${esc(APP_VERSION)} · © 2026 ${esc(OWNER)}</span>
+    <button type="button" class="dash-linkbtn" data-show="terms">Terms of use</button>
+    <button type="button" class="dash-linkbtn" data-show="license">MIT License</button>
+    ${siteLink("stevendesignco.com")}`;
+}
+// Any "Terms of use" or "License" button, wherever it is.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-show]");
+  if (!b) return;
+  e.preventDefault();
+  if (b.dataset.show === "terms") showTerms();
+  if (b.dataset.show === "license") showLicense();
+});
 
 /* ---------- Boot ---------- */
 
@@ -1340,25 +1794,43 @@ async function boot() {
   try {
     S = await loadAll();
     G = await api("/api/google/status");
+    try { BK = await api("/api/boards/keys"); } catch (e) { /* keys stay unknown; boards still show */ }
   } catch (err) {
     $("boot").textContent = "The app server is not running. In Terminal: cd to this folder and run node server.mjs, then reload.";
     return;
   }
   $("boot").remove();
+  renderFoot();
   useFontKit(S.settings && S.settings.fontKit);
   $("theme-toggle").onclick = () => setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
   if (!S.settings || !S.settings.onboarded) {
     document.body.classList.add("is-welcome");
     document.querySelectorAll(".dash-view").forEach((v) => { v.hidden = v.getAttribute("data-view") !== "welcome"; });
+    await loadProps();
     renderWelcome();
     return;
   }
   start();
 }
 
+// Boards from the old "More job boards" box ("Company | link" lines) join the Job boards list.
+function moveOldBoards() {
+  const L = S.settings.leads;
+  if (!L || !(L.extraBoards || []).length) return;
+  L.customBoards = L.customBoards || [];
+  for (const line of L.extraBoards) {
+    const [name, url] = String(line).split("|").map((x) => x.trim());
+    if (!name || !url || L.customBoards.some((c) => c.url === url)) continue;
+    L.customBoards.push({ id: uniqueId(`my-${slugify(name)}`, L.customBoards), name, url, kind: "company", feedUrl: "", status: "ok", message: "A company job board. The app reads it on its own.", on: true });
+  }
+  L.extraBoards = [];
+  save("settings", S.settings).catch(() => { /* tried again on the next save */ });
+}
+
 let started = false;
 async function start() {
   await loadProps();
+  moveOldBoards();
   let saved = null; try { saved = localStorage.getItem("dash-collapsed"); } catch (e) { /* private mode */ }
   setCollapsed(narrow.matches || saved === "1", false);
   if (currentView() === "pull") applyPullParams();
@@ -1384,11 +1856,33 @@ async function start() {
     if (lr) { reachOut(lr.dataset.leadReach); return; }
     const lh = e.target.closest("[data-lead-hide]");
     if (lh) {
-      const h = new Set(S.leads.hidden || []);
-      if (h.has(lh.dataset.leadHide)) h.delete(lh.dataset.leadHide); else h.add(lh.dataset.leadHide);
-      S.leads.hidden = [...h];
-      await save("leads", S.leads);
-      renderNav(); renderLeads();
+      const id = lh.dataset.leadHide;
+      const card = lh.closest("li");
+      const list = card ? [...card.parentElement.children] : [];
+      const at = list.indexOf(card);
+      const job = leadById(id);
+      let done = false;
+      const finish = async () => {
+        if (done) return;
+        done = true;
+        const h = new Set(S.leads.hidden || []);
+        const hiding = !h.has(id);
+        if (hiding) h.add(id); else h.delete(id);
+        S.leads.hidden = [...h];
+        await save("leads", S.leads);
+        renderNav(); renderLeads();
+        $("leads-status").textContent = hiding ? `Hidden: ${job ? job.title : "that job"}. "Show the jobs you hid" brings it back.` : `Back on the list: ${job ? job.title : "that job"}.`;
+        // Keep the keyboard where it was: the card that moved into this spot, or the one before it.
+        const cards = document.querySelectorAll("#leads-list .dash-leads > li");
+        const next = cards[Math.min(at, cards.length - 1)];
+        const target = next ? next.querySelector(".dash-lead__title") : $("leads-summary").querySelector("a, button");
+        if (target) target.focus();
+      };
+      if (card && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        card.classList.add("is-leaving");
+        card.addEventListener("transitionend", finish, { once: true });
+        setTimeout(finish, 450); // in case the transition never reports back
+      } else finish();
       return;
     }
     const m = e.target.closest("[data-edit-match]"); if (m) return editMatch(m.dataset.editMatch);

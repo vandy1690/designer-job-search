@@ -31,11 +31,14 @@ approve it.
 
 ## 3. What happens next
 
-1. Your browser opens the app on its first-run setup: your name and city, the jobs you want, and
-   your websites.
-2. The last step opens Settings, where seven short steps connect your Google Analytics. Each step
-   has a button that opens the right Google page and tells you what to click.
-3. Add the jobs you applied to under **Applications**. Paste a job link and the details fill in.
+1. Your browser opens the app's setup. It asks about you, the jobs you want, which job boards to
+   check, and your websites.
+2. It walks you through connecting Google Analytics in seven short steps. Each step has a button
+   that opens the right Google page and tells you what to click.
+3. It asks for the jobs you have applied to. Paste job links and the details fill in.
+4. The last screen shows what is set up and what is left.
+
+Your answers save as you go. If you stop partway, the app picks up on the same question next time.
 
 ## What Claude does and does not do
 
@@ -58,5 +61,7 @@ It does not:
 - **Start it again:** in Terminal, `cd ~/designer-job-search && node server.mjs`, or ask Claude to
   "start Designer Job Search".
 - **Update it:** ask Claude to "update Designer Job Search with git pull and restart it".
+- **Get the Mac app:** ask Claude to "run npm run app in Designer Job Search". It builds an app with
+  its own window and Dock icon.
 - **Try the demo:** ask Claude to "run the Designer Job Search demo", then open
   [http://localhost:4341/](http://localhost:4341/).
