@@ -121,30 +121,46 @@
       </section>
 
       <section class="dash-view" data-view="overview" hidden>
-        <div class="dash-kpis" id="kpis"></div>
-        <p class="dash-note" id="kpi-note"></p>
         <div class="dash-split">
-          <sdc-card><div class="dash-panel">
-            <div class="dash-panel__head"><h3>Latest reads</h3><a class="dash-more" href="#pull">View all <svg class="dash-icon dash-icon--sm" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow"/></svg></a></div>
-            <ul class="dash-activity" id="activity"></ul>
-          </div></sdc-card>
+          <div class="dash-stack">
+            <sdc-card><div class="dash-panel">
+              <div class="dash-panel__head"><h3>Top job matches</h3><a class="dash-more" href="#leads">View all <svg class="dash-icon dash-icon--sm" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow"/></svg></a></div>
+              <ul class="dash-activity" id="ov-jobs"></ul>
+            </div></sdc-card>
+            <sdc-card><div class="dash-panel">
+              <div class="dash-panel__head"><h3>Latest reads</h3><a class="dash-more" href="#pull">View all <svg class="dash-icon dash-icon--sm" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow"/></svg></a></div>
+              <ul class="dash-activity" id="activity"></ul>
+            </div></sdc-card>
+          </div>
           <div class="dash-stack">
             <sdc-card><div class="dash-panel">
               <div class="dash-panel__head"><h3>How they arrived</h3></div>
               <ul class="dash-bars" id="ov-channels"></ul>
             </div></sdc-card>
             <sdc-card><div class="dash-panel">
-              <div class="dash-panel__head"><h3>Most-read pages</h3><a class="dash-more" href="#reading">More <svg class="dash-icon dash-icon--sm" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow"/></svg></a></div>
+              <div class="dash-panel__head"><h3>Most-read pages</h3></div>
               <ul class="dash-rank" id="ov-pages"></ul>
+            </div></sdc-card>
+            <sdc-card><div class="dash-panel">
+              <div class="dash-panel__head"><h3>Where they read from</h3></div>
+              <ul class="dash-rank" id="ov-places"></ul>
             </div></sdc-card>
           </div>
         </div>
+        <div class="dash-kpis" id="kpis"></div>
+        <p class="dash-note" id="kpi-note"></p>
       </section>
 
       <section class="dash-view" data-view="pull" hidden>
-        <div class="dash-filterbar">
-          <p class="sdc-field__label" id="filters-label">Filter by odds</p>
-          <div class="dash-filters" id="filters" role="group" aria-labelledby="filters-label"></div>
+        <div class="dash-filterrow">
+          <div class="dash-filterbar">
+            <p class="sdc-field__label" id="filters-label">Filter by odds</p>
+            <div class="dash-filters" id="filters" role="group" aria-labelledby="filters-label"></div>
+          </div>
+          <div class="dash-filterbar">
+            <p class="sdc-field__label" id="when-label">When</p>
+            <div class="dash-filters" id="when-filters" role="group" aria-labelledby="when-label"></div>
+          </div>
         </div>
         <ul class="dash-legend" id="legend" aria-label="What the odds mean"></ul>
         <div id="pull-only"></div>
@@ -164,22 +180,6 @@
         <div id="leads-list"></div>
         <div class="dash-pagerbar" id="leads-pager"></div>
         <div id="leads-more"></div>
-      </section>
-
-      <section class="dash-view" data-view="latest" hidden>
-        <div class="dash-grid" id="c-latest"></div>
-        <h3 class="dash-table-heading" id="latest-heading"></h3>
-        <div class="dash-table" id="latest-table"></div>
-        <div class="dash-pagerbar" id="latest-pager"></div>
-      </section>
-
-      <section class="dash-view" data-view="conclusions" hidden>
-        <p class="dash-note" id="notes-written"></p>
-        <div id="c-conclusions"></div>
-      </section>
-
-      <section class="dash-view" data-view="reading" hidden>
-        <div class="dash-stack" id="c-reading"></div>
       </section>
 
       <section class="dash-view" data-view="health" hidden>

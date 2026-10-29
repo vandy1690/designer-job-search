@@ -8,17 +8,19 @@ when. It also finds open jobs that fit you and suggests someone to reach out to 
 
 It runs on your own computer. Your applications, contacts and notes never leave it.
 
-![Overview: high, medium and low odds reads, resume downloads, applicant systems and AI referrals](docs/screenshots/overview.png)
+![Overview: the top job matches, the latest reads, how readers arrived, and the odds counts](docs/screenshots/overview.png)
 
-Every screenshot here comes from the built-in demo. The people, companies and websites in it are
-made up.
+The Overview, Application pull, Application links, Applications and Contacts screenshots come from
+a real job search, with people's names and pay blurred out. The rest come from the built-in demo,
+where every person, company and website is made up.
 
 ## What it does
 
 **Application pull.** Each reader of your site, scored against your applications and contacts.
 High odds means the visit came from inside an applicant system, or within hours of a call or a
 referral, from a place that fits the job. Every name is an estimate: Google Analytics never names
-a person or a company.
+a person or a company. **Last 7 days** narrows the list to the reads that came in or changed this
+week.
 
 ![Application pull: a table of reads with odds, time, likely reader, application, source, place and pages read](docs/screenshots/application-pull.png)
 
@@ -45,21 +47,21 @@ template. You copy the note and send it yourself. The app never sends anything f
 
 Also in the app:
 
-- **Latest pull:** what came in over the last 7 days, and what was filtered out (your own visits,
-  machines and spam).
-- **Reading and reach:** which pages people read, how they arrived, and where they read from.
-- **Data health:** a check of each website's Google Analytics setup, with a link to each fix.
+- **Overview:** your top three job matches, the latest reads, how readers arrived, which pages
+  they read and where they read from.
+- **Data health:** a check of each website's Google Analytics setup, with a link to each fix, and
+  what the last pull read and left out (your own visits, machines and spam).
 - **Applications** and **Contacts:** the lists the odds are scored against. Paste a job link and
   the company, role, requisition number and places fill in.
 - Light and dark themes.
 
 <table>
 <tr>
-<td><img src="docs/screenshots/latest-pull.png" alt="Latest pull"></td>
 <td><img src="docs/screenshots/data-health.png" alt="Data health"></td>
+<td><img src="docs/screenshots/applications.png" alt="Applications"></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/applications.png" alt="Applications"></td>
+<td><img src="docs/screenshots/contacts.png" alt="Contacts"></td>
 <td><img src="docs/screenshots/overview-dark.png" alt="Overview in the dark theme"></td>
 </tr>
 </table>
@@ -75,8 +77,6 @@ Also in the app:
 - About 15 minutes for the first setup.
 
 ## Install
-
-The repository is private for now. To install it, you need an invitation to it on GitHub.
 
 ### The easy way: ask Claude
 
@@ -292,8 +292,9 @@ in the page.
 | `scripts/a11y.mjs` | Accessibility check, WCAG 2.2 AA with axe-core (`npm run a11y`) |
 | `js/terms.js` | The terms of use and license the app shows (`npm run terms` copies them) |
 
-`npm run screenshots` needs Google Chrome and Node 22. The screenshots only ever come from the
-demo, so they carry no personal information.
+`npm run screenshots` needs Google Chrome and Node 22. It rebuilds the demo screenshots: Reach out,
+Data health, Job boards, the dark Overview and the setup screens. The five real screenshots are
+kept by hand, with people's names and pay blurred, and the script leaves them alone.
 
 ## Terms of use
 

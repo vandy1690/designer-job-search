@@ -8,7 +8,8 @@ applied to, and finds open jobs with someone to reach out to. Read README.md fir
 - `node server.mjs` (or `npm start`): the app at http://localhost:4340/.
 - `npm run demo`: made-up data at http://localhost:4341/. Google and job boards are switched off.
 - `npm run demo:fresh`: an empty install, to see the first-run setup.
-- `npm run screenshots`: rebuilds `docs/screenshots/` from the demo in headless Chrome.
+- `npm run screenshots`: rebuilds the demo screenshots in `docs/screenshots/` in headless Chrome.
+  It leaves the five real, redacted ones alone.
 - The server reads static files on each request, but changes to `server.mjs` or `lib/` need a
   restart.
 
@@ -88,7 +89,11 @@ checked by hand on 2026-10-27; when a site changes, change its line there.
 
 All three are in `.gitignore`. Do not open, print or copy `store/` or `config/` unless the user
 asks you to work on their own data. Even then, never print a key. Edit `store/*.json` only while
-the server is stopped. Screenshots for the repo must come from the demo, never from a real store.
+the server is stopped. Never take a screenshot of a real store yourself. The five real README
+screenshots (overview, application-pull, job-matches, applications, contacts) were supplied by the
+user on 2026-10-29 with people's names and pay blurred so they cannot be read back, and the browser
+cropped away. Any replacement must be supplied by the user and redacted the same way before it is
+committed. Every other screenshot comes from the demo.
 
 ## Rules for changes
 

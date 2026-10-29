@@ -9,7 +9,7 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { companyKey } from "../js/engine.js";
+import { companyKey, dayIn, partsIn } from "../js/engine.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EMPTY = process.argv.includes("--empty");
@@ -19,9 +19,14 @@ const CONFIG = process.env.SA_CONFIG ? resolve(process.env.SA_CONFIG) : join(ROO
 const PORT = process.env.PORT || "4341";
 
 /* ---------- Dates, counted back from today ---------- */
+// Days are on the demo person's own calendar (Pacific, as in the settings below), never the UTC
+// date, which is already tomorrow on a US evening. Before noon there, "today" is yesterday, so the
+// call at 9:20 and the read at 10 AM are always in the past.
+const TZ = "America/Los_Angeles";
 const NOW = Date.now();
 const DAY = 24 * 3600 * 1000;
-const day = (n) => new Date(NOW - n * DAY).toISOString().slice(0, 10);
+const SHIFT = partsIn(TZ, NOW).hour < 12 ? 1 : 0;
+const day = (n) => dayIn(NOW - (n + SHIFT) * DAY, TZ);
 const at = (n, hhmm) => `${day(n)}T${hhmm}`;
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -32,7 +37,7 @@ const MESSAGE_NOTE = "Hi {first},\n\nI saw the {role} role at {company} and want
 const settings = {
   version: 1, onboarded: true,
   profile: { name: "Alex", pitch: "I design payments products and the design systems behind them.", homeCity: "Portland, Oregon" },
-  displayTimeZone: "America/Los_Angeles",
+  displayTimeZone: TZ,
   sites: [
     { id: "alexrivera-example", name: "alexrivera.example", role: "Portfolio, for hiring managers", propertyId: "100000001", propertyName: "alexrivera.example", timeZoneOverride: "", hosts: ["alexrivera.example", "www.alexrivera.example"], notes: [], health: { timeZone: "America/Los_Angeles", retention: "TWO_MONTHS", name: "alexrivera.example", checkedAt: new Date(NOW - 3600 * 1000).toISOString() } },
     { id: "riverastudio-example", name: "riverastudio.example", role: "Freelance studio site", propertyId: "", propertyName: "", timeZoneOverride: "", hosts: ["riverastudio.example", "www.riverastudio.example"], notes: [], health: {} }
@@ -168,7 +173,7 @@ const pull = (agoHours, source, start, newIds, extra = {}) => {
   const iso = when.toISOString();
   return {
     id: `${iso.slice(0, 10)}T${iso.slice(11, 13)}${iso.slice(14, 16)}`, at: iso, source,
-    range: { start: day(start), end: iso.slice(0, 10) }, sites: ["alexrivera-example"],
+    range: { start: day(start), end: dayIn(when.getTime(), TZ) }, sites: ["alexrivera-example"],
     events: 60 + newIds.length * 22, pageViews: 18 + newIds.length * 7, firstVisits: 6 + newIds.length * 2,
     readers: newIds.length + 3, realReaders: newIds.length, thin: 2,
     filtered: { own: 9, machine: 14, spam: 1, "other-host": 0 },
@@ -185,18 +190,8 @@ const pulls = [
 pulls[pulls.length - 1].updatedMatches = ids(3);
 
 /* ---------- Notes ---------- */
-const notes = {
-  written: day(2),
-  conclusions: [
-    { icon: "signal", title: "A visit usually means someone has your file open", text: "Four of the five high odds reads came within a day of a call, a referral or an automated reply." },
-    { icon: "users", title: "People bring readers. Cold applications rarely do.", text: "Reads after a recruiter call or a referral outnumber reads after a plain application, three to one." },
-    { icon: "book", title: "The checkout case study does the work", text: "Most readers who go past the home page open the checkout redesign first." },
-    { icon: "sparkle", title: "AI assistants have started sending readers", text: "Two visits arrived from AI assistants this month, both landing on the design system page." },
-    { icon: "eyeoff", title: "No reads from the San Francisco application", text: "Proseware never sent a reader before the rejection." }
-  ],
-  steps: [],
-  silences: ["No visit from San Francisco near the Proseware application.", "No referrer has come from a Lever applicant system yet.", "No reader from Atlanta near the Coho Logistics application."]
-};
+// No notes: nothing in the app writes or shows them since Conclusions was removed (2026-10-28).
+const notes = { conclusions: [], steps: [], silences: [] };
 
 /* ---------- Job matches ---------- */
 // [company, title, board type, location, posted days ago, pay or null]

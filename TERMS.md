@@ -1,12 +1,16 @@
 # Terms of use
 
-Designer Job Search, by [Steven Design Services LLC](https://stevendesignco.com). Version 2026-10-27.
+Designer Job Search, by [Steven Design Services LLC](https://stevendesignco.com). Version 2026-10-28.
 
 The app shows these same terms on its first setup screen, where you agree to them, and in its footer.
 
 ## Who provides this app
 
-Designer Job Search is made by Steven Design Services LLC, an Illinois company. It is free, and it is offered under the MIT License. By installing or using it, you agree to these terms. If you do not agree, do not use the app.
+Designer Job Search is made by Steven Design Services LLC, an Illinois company. It is free, and it is offered under the MIT License. You must be 18 or older to use it. By installing or using it, you agree to these terms. If you do not agree, do not use the app.
+
+## Not connected to other companies
+
+Designer Job Search is not made by, connected to or endorsed by Google, LinkedIn, Adzuna, or any job board or job site it reads or links to. Their names belong to their owners.
 
 ## Estimates, not facts
 
@@ -28,6 +32,10 @@ The app reads only public job feeds and pages that sites allow apps to read, and
 
 The app stores the names of people you contact and notes about them, on your computer only. Keep that information private, share it only as the law allows, and delete what you no longer need.
 
+## Your website's visitors
+
+The app reads Google Analytics from websites you run. The people who visit those websites are covered by each website's own privacy notice. You are responsible for having one, and for following Google's rules for Analytics.
+
 ## Your computer, your data
 
 Your data and keys stay on your computer. Steven Design Services LLC never receives them. You are responsible for keeping your computer, your Google key and your backups safe.
@@ -42,7 +50,7 @@ The app is provided "as is" and "as available", without warranties of any kind, 
 
 ## Limit of liability
 
-To the fullest extent the law allows, Steven Design Services LLC, its owner and contributors are not liable for any damages of any kind arising from the app or its use, including lost data, lost job opportunities, missed messages, or claims by other people, even if told such damages were possible. Where liability cannot be excluded, it is limited to the amount you paid for the app, which is zero.
+To the fullest extent the law allows, Steven Design Services LLC, its owner and contributors are not liable for any damages of any kind arising from the app or its use, including lost data, lost job opportunities, missed messages, or claims by other people, even if told such damages were possible. Where liability cannot be excluded, it is limited to fifty US dollars ($50).
 
 ## Holding harmless
 
@@ -50,7 +58,7 @@ You agree to hold Steven Design Services LLC harmless from claims that arise fro
 
 ## Governing law and changes
 
-These terms are governed by the laws of the State of Illinois. They may change with a new version of the app; the date at the top shows which version you have. Questions: see the contact page at stevendesignco.com.
+These terms are governed by the laws of the State of Illinois. They may change with a new version of the app; the date at the top shows which version you have. If a court finds that any part of these terms cannot be enforced, the rest still apply. Questions: see the contact page at stevendesignco.com.
 
 ## License
 

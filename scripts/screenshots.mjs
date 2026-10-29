@@ -76,17 +76,14 @@ async function main() {
 
   await size(900);
   // The demo: every person, company and website is made up.
+  // overview, application-pull, job-matches, applications and contacts are real screenshots with
+  // names and pay blurred, kept by hand (see CLAUDE.md). This script never writes them.
   await open(`http://localhost:${DEMO}/#overview`);
-  await shot("overview");
-  await view("#pull"); await shot("application-pull", 1180);
-  await view("#leads"); await shot("job-matches", 1180);
+  await view("#leads");
   await js(`document.querySelector("[data-lead-reach]").click(); true`); await sleep(500);
   await shot("reach-out", 1150);
   await js(`document.getElementById("dialog").close(); true`);
-  await view("#latest"); await shot("latest-pull", 1000);
-  await view("#reading"); await shot("reading-and-reach", 1100);
   await view("#health"); await shot("data-health");
-  await view("#applications"); await shot("applications");
   await view("#settings?go=boards"); await sleep(300); await shot("job-boards", 1400, "#set-boards");
   await view("#overview");
   await js(`localStorage.setItem("dash-theme", "dark"); true`);

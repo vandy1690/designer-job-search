@@ -1,7 +1,7 @@
 // Designer Job Search: the page. Reads the app's data from the local server, renders every view,
 // and edits applications, contacts, matches and settings. Pulls run on the server.
 import { loadAll, save, api } from "./store.js";
-import { countsOf, atsOfUrl, companyKey, metroLabel } from "./engine.js";
+import { countsOf, atsOfUrl, companyKey, metroLabel, dayIn } from "./engine.js";
 import { BOARDS, boardOn, linkOn } from "./boards.js";
 import { TERMS, TERMS_VERSION, LICENSE, OWNER, SITE, APP_VERSION } from "./terms.js";
 
@@ -10,6 +10,9 @@ const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const icon = (id, extra) => `<svg class="dash-icon${extra ? " " + extra : ""}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${id}"/></svg>`;
 const tile = (id, tone) => `<span class="dash-tile${tone ? " dash-tile--" + tone : ""}">${icon(id)}</span>`;
+// Link text with an external icon: the last word and the icon stay on one line, so the icon
+// never wraps onto a line by itself.
+const keepIcon = (label) => { const w = String(label).split(" "), last = w.pop(); return `${w.length ? esc(w.join(" ")) + " " : ""}<span class="dash-keep">${esc(last)}${icon("external", "dash-icon--sm")}</span>`; };
 const panel = (title, inner, iconId, tone) => `<sdc-card><div class="dash-panel"><div class="dash-panel__head"><div class="dash-panel__title">${iconId ? tile(iconId, tone) : ""}<h3>${esc(title)}</h3></div></div>${inner}</div></sdc-card>`;
 // Only real web addresses become links. Anything else (a javascript: address in an imported file) stays text.
 const safeUrl = (u) => { try { const x = new URL(String(u)); return x.protocol === "https:" || x.protocol === "http:" ? x.href : ""; } catch (e) { return ""; } };
@@ -41,6 +44,7 @@ let BK = { adzuna: { saved: false } };            // which job boards have a key
 let props = null; // GA4 properties, once connected
 const paging = {};
 let filterOdds = "all";
+let filterWeek = false; // Application pull: only reads that came in or changed in the last 7 days
 let filterOnly = ""; // "resume", "ats" or "ai": a narrower slice opened from an Overview card
 let focusRead = "";  // a read to show and highlight, opened from Latest reads
 const ONLY = {
@@ -53,6 +57,7 @@ function applyPullParams() {
   const q = hashParams();
   filterOdds = ["high", "medium", "low"].includes(q.get("odds")) ? q.get("odds") : "all";
   filterOnly = ONLY[q.get("only")] ? q.get("only") : "";
+  filterWeek = q.get("when") === "week";
   focusRead = q.get("read") || "";
   paging.pull = 0;
 }
@@ -60,7 +65,7 @@ function applyPullParams() {
 /* ---------- Views and navigation ---------- */
 
 // Reads that came in or changed in pulls after a moment (ms). Pulls run every few hours, so
-// "latest" means the last 7 days, not only the very last pull (which is often empty).
+// "recent" means the last 7 days, not only the very last pull (which is often empty).
 const DAY_MS = 24 * 3600 * 1000;
 function readsSince(ms) {
   const ids = new Set();
@@ -73,12 +78,9 @@ function views() {
   const last = S.pulls[S.pulls.length - 1];
   const latestCount = readsSince(latestSeen()).size;
   return [
-    { id: "overview", group: "main", label: "Overview", icon: "overview", sub: "Your sites at a glance" },
-    { id: "pull", group: "main", label: "Application pull", icon: "pull", sub: "An estimate of which applications drew a reader, and who it likely was" },
+    { id: "overview", group: "main", label: "Overview", icon: "overview", sub: "Your job search at a glance" },
+    { id: "pull", group: "main", label: "Application pull", icon: "pull", sub: last ? `An estimate of which applications drew a reader, and who it likely was · last pulled ${dot(pulledDate(last))}` : "An estimate of which applications drew a reader, and who it likely was", badge: latestCount },
     { id: "leads", group: "jobs", label: "Application links", icon: "warm", sub: "Jobs that match you, and who to reach out to about each one", badge: newLeadCount() },
-    { id: "latest", group: "main", label: "Latest pull", icon: "latest", sub: last ? `What came in over the last 7 days · last pulled ${dot(pulledDate(last))}` : "No pull yet", badge: latestCount },
-    { id: "conclusions", group: "main", label: "Conclusions", icon: "bulb", sub: "What the data says" },
-    { id: "reading", group: "main", label: "Reading and reach", icon: "book", sub: "Pages, arrival paths and places" },
     { id: "health", group: "main", label: "Data health", icon: "pulse", sub: "Analytics sources on every site", badge: healthIssues().length, warn: true },
     { id: "applications", group: "track", label: "Applications", icon: "briefcase", sub: "What you applied to. The odds are scored against this list.", badge: 0 },
     { id: "contacts", group: "track", label: "Contacts", icon: "chat", sub: "Calls, messages and notes that can prompt a visit" },
@@ -103,6 +105,13 @@ function renderNav() {
   }).join("");
   setCollapsed($("shell").getAttribute("data-collapsed") === "true", false);
   markCurrent();
+}
+
+// Pages folded into others on 2026-10-28. An old address opens where that content went.
+const MOVED = { latest: "#pull?when=week", reading: "#overview", conclusions: "#overview" };
+function followMoved() {
+  const to = MOVED[location.hash.slice(1).split("?")[0]];
+  if (to) history.replaceState(null, "", to);
 }
 
 function currentView() { return (location.hash.slice(1).split("?")[0]) || "overview"; }
@@ -165,8 +174,11 @@ function useFontKit(kit) {
 const visitsOf = (m) => (m.visits && m.visits.length ? m.visits : [[m.date, ""]]);
 const zoneFmt = () => new Intl.DateTimeFormat("en-US", { timeZone: S.settings.displayTimeZone || LOCAL_TZ, timeZoneName: "short" });
 const zoneOf = (iso) => zoneFmt().formatToParts(new Date(`${iso}T17:00:00Z`)).find((p) => p.type === "timeZoneName").value;
-const zoneFor = (list) => { const z = new Set(); list.forEach((m) => visitsOf(m).forEach((v) => z.add(zoneOf(v[0])))); return z.size === 1 ? [...z][0] : z.size ? "local" : zoneOf(new Date().toISOString().slice(0, 10)); };
-const pulledDate = (p) => new Intl.DateTimeFormat("en-CA", { timeZone: S.settings.displayTimeZone || LOCAL_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(p.at));
+const zoneFor = (list) => { const z = new Set(); list.forEach((m) => visitsOf(m).forEach((v) => z.add(zoneOf(v[0])))); return z.size === 1 ? [...z][0] : z.size ? "local" : zoneOf(today()); };
+// Days on the user's calendar, in the zone chosen under Settings (this computer's by default).
+const userTz = () => (S && S.settings && S.settings.displayTimeZone) || LOCAL_TZ;
+const today = () => dayIn(Date.now(), userTz());
+const pulledDate = (p) => dayIn(p.at, userTz());
 const sortedMatches = () => S.matches.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 const aiTotal = (pulls) => pulls.reduce((n, p) => n + (p.aiVisits ? p.aiVisits.length : p.ai || 0), 0);
 const lastPull = () => S.pulls[S.pulls.length - 1];
@@ -270,8 +282,23 @@ function renderOverview() {
     return `<li class="dash-activity__item">${tile(CH_ICON[x.channel] || "mail", tone)}<div><a class="sdc-card__link dash-activity__title" href="#pull?read=${encodeURIComponent(x.id)}">${esc(x.who)}<span class="sdc-u-sr-only">. Open this read on Application pull.</span></a><span class="dash-activity__sub">${esc(x.place)} · ${esc(x.application)}</span></div>
       <div class="dash-activity__meta"><strong>${dot(x.date)}</strong>${oddsIcon(x.confidence)}</div></li>`;
   }).join("") || '<li><div></div><div class="dash-note">No reads yet. Finish the Google Analytics setup in Settings.</div></li>';
-  $("ov-channels").innerHTML = bars(channelRows());
-  $("ov-pages").innerHTML = pageRows().slice(0, 5).map((r) => `<li><span>${esc(r[0])}</span><strong>${r[1]}</strong></li>`).join("");
+  const none = '<li class="dash-note">No reads yet.</li>';
+  const rank = (rows) => rows.slice(0, 6).map((r) => `<li><span>${esc(r[0])}</span><strong>${r[1]}</strong></li>`).join("") || none;
+  $("ov-channels").innerHTML = bars(channelRows()) || none;
+  $("ov-pages").innerHTML = rank(pageRows());
+  $("ov-places").innerHTML = rank(tally(readers(), (x) => metro(x.place)));
+  renderTopJobs();
+}
+
+// The best three jobs, in the same order as Application links, with who to reach out to.
+function renderTopJobs() {
+  const top = S.leads ? leadList({ hidden: false, onlyKnown: false }).shown.slice(0, 3) : [];
+  $("ov-jobs").innerHTML = top.map((j) => {
+    const pay = j.pay ? `${money(j.pay.min)}${j.pay.max !== j.pay.min ? ` to ${money(j.pay.max)}` : ""}` : "Pay not posted";
+    const who = j.reached ? `You reached out${j.reached.person ? ` to ${j.reached.person}` : ""}` : j.warm.length ? `Reach out to ${j.warm[0].person}` : "No one on file there yet";
+    return `<li class="dash-activity__item">${tile(j.warm.length || j.reached ? "users" : "search", j.warm.length || j.reached ? "high" : "mute")}<div><a class="sdc-card__link dash-activity__title dash-jd" href="${esc(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer">${keepIcon(j.title)}<span class="sdc-u-sr-only"> (job posting, opens in a new tab)</span></a><span class="dash-activity__sub">${esc([j.company, pay, who].join(" · "))}</span></div>
+      <div class="dash-activity__meta">${j.posted ? `<strong>${dot(j.posted)}</strong>` : ""}</div></li>`;
+  }).join("") || `<li><div></div><div class="dash-note">${S.leads ? "No open jobs match right now. The next check runs tomorrow." : "The first job check runs within a minute of starting the app."}</div></li>`;
 }
 
 function tally(list, key) {
@@ -290,7 +317,14 @@ const metro = metroLabel;
 
 function renderPull() {
   const base = sortedMatches();
-  const all = filterOnly ? base.filter(ONLY[filterOnly].test) : base;
+  const sliced = filterOnly ? base.filter(ONLY[filterOnly].test) : base;
+  // When: every read, or only those that came in or changed in the last 7 days.
+  const recent = readsSince(Date.now() - 7 * DAY_MS);
+  const week = sliced.filter((m) => recent.has(m.id));
+  $("when-filters").innerHTML = [["any", "Any time", "overview", sliced.length], ["week", "Last 7 days", "clock", week.length]].map(([k, l, ic, n]) =>
+    `<button type="button" class="sdc-btn dash-filter dash-filter--all${(k === "week") === filterWeek ? " sdc-btn--primary" : ""}" aria-pressed="${(k === "week") === filterWeek}" data-when="${k}">${icon(ic, "dash-icon--sm")}${l} · ${n}</button>`).join("");
+  try { if (currentView() === "pull") localStorage.setItem("dash-latest-seen", String(Date.now())); } catch (e) { /* private mode */ }
+  const all = filterWeek ? week : sliced;
   $("pull-only").innerHTML = filterOnly ? `<p class="dash-active-filter" role="status">${icon("filter", "dash-icon--sm")}<span>Showing only reads that ${esc(ONLY[filterOnly].label)}.</span><a class="dash-rowbtn" href="#pull">Show all reads</a></p>` : "";
   const counts = { all: all.length, high: 0, medium: 0, low: 0 };
   all.forEach((m) => { if (counts[m.confidence] !== undefined) counts[m.confidence]++; });
@@ -304,55 +338,10 @@ function renderPull() {
     const i = list.findIndex((m) => m.id === focusRead);
     if (i >= 0) paging.pull = Math.floor(i / PAGE_SIZE);
   }
-  if (!list.length) { $("pull-table").innerHTML = '<p class="dash-note" style="padding: var(--sdc-space-md)">No reads match this filter yet.</p>'; $("pull-pager").innerHTML = ""; return; }
+  if (!list.length) { $("pull-table").innerHTML = `<p class="dash-note" style="padding: var(--sdc-space-md)">${filterWeek && !all.length ? "No new or updated reads in the last 7 days." : "No reads match this filter yet."}</p>`; $("pull-pager").innerHTML = ""; return; }
   paged("pull", list, matchTable, "pull-table", "pull-pager");
   const row = focusRead && document.querySelector(`#pull-table tr[data-row="${CSS.escape(focusRead)}"]`);
   if (row) requestAnimationFrame(() => { row.scrollIntoView({ block: "center" }); row.focus({ preventScroll: true }); });
-}
-
-function renderLatest() {
-  const last = lastPull();
-  if (!last) { $("c-latest").innerHTML = panel("No pull yet", '<p>Finish the Google Analytics setup in Settings. The first check for new visits runs right after.</p>', "latest"); $("latest-table").innerHTML = ""; $("latest-pager").innerHTML = ""; return; }
-  let cards = last.items;
-  if (!cards) {
-    const f = last.filtered || {};
-    const fresh = S.matches.filter((m) => (last.newMatches || []).includes(m.id));
-    // (cards describe the most recent pull only)
-    const byOdds = (c) => fresh.filter((m) => m.confidence === c).length;
-    cards = [
-      { icon: "latest", title: "What came in", items: [
-        `${last.events || 0} events, ${last.pageViews || 0} page views, ${last.firstVisits || 0} first visits.`,
-        `${last.realReaders || 0} readers worth a look, ${last.thin || 0} too thin to score.`,
-        `<strong>New:</strong> ${byOdds("high")} high, ${byOdds("medium")} medium, ${byOdds("low")} low. ${(last.updatedMatches || []).length} earlier ${(last.updatedMatches || []).length === 1 ? "reader" : "readers"} came back.`
-      ] },
-      { icon: "sparkle", title: "AI assistants", items: [last.ai ? `${last.ai} new ${last.ai === 1 ? "visit" : "visits"} from an AI assistant.` : "No AI assistant visits this pull."] },
-      { icon: "filter", title: "Filtered out", items: [`Your own visits: ${f.own || 0}.`, `Machines: ${f.machine || 0}.`, `Referral spam: ${f.spam || 0}.`, `Other sites in the same property: ${f["other-host"] || 0}.`] },
-      { icon: "clock", title: "This pull", items: [`${last.source || "Pull"}, ${new Date(last.at).toLocaleString("en-US", { timeZone: S.settings.displayTimeZone, month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}.`, `Covers ${dot(last.range.start)} to ${dot(last.range.end)}.`, `Next automatic pull within ${S.settings.autoPullHours || 6} hours while the app runs.`] }
-    ];
-  }
-  if (!last.items && !(last.newMatches || []).length && !(last.updatedMatches || []).length) cards[0].items.unshift("<strong>Nothing new since the pull before.</strong> The table below shows the last 7 days.");
-  $("c-latest").innerHTML = cards.map((c) => panel(c.title, `<ul class="dash-list">${c.items.map((i) => `<li>${i}</li>`).join("")}</ul>`, c.icon)).join("");
-  const ids = readsSince(Date.now() - 7 * DAY_MS);
-  const list = sortedMatches().filter((m) => ids.has(m.id));
-  $("latest-heading").textContent = `New and updated reads, last 7 days (${list.length})`;
-  if (!list.length) { $("latest-table").innerHTML = '<p class="dash-note" style="padding: var(--sdc-space-md)">No new readers in the last 7 days.</p>'; $("latest-pager").innerHTML = ""; }
-  else paged("latest", list, matchTable, "latest-table", "latest-pager");
-  try { if (currentView() === "latest") localStorage.setItem("dash-latest-seen", String(Date.now())); } catch (e) { /* private mode */ }
-}
-
-function renderConclusions() {
-  $("notes-written").textContent = S.notes.written ? `Written ${dot(S.notes.written)}. These are notes, not live numbers.` : "";
-  if (!(S.notes.conclusions || []).length) { $("c-conclusions").innerHTML = '<p class="dash-note">Nothing here yet. After a few weeks of visits, this is where notes about what the data shows go.</p>'; return; }
-  $("c-conclusions").innerHTML = `<ul class="dash-iconlist">${(S.notes.conclusions || []).map((c) => `<li>${tile(c.icon)}<div><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></div></li>`).join("")}</ul>`;
-}
-
-function renderReading() {
-  const places = tally(readers(), (x) => metro(x.place));
-  $("c-reading").innerHTML =
-    panel("What they read", `<p class="dash-note">Real readers who opened each page (home left out, every reader lands there).</p><ul class="dash-bars" style="margin-top: var(--sdc-space-sm)">${bars(pageRows())}</ul>`, "book") +
-    panel("How they arrived", `<p class="dash-note">High and medium reads, by what came right before the visit.</p><ul class="dash-bars" style="margin-top: var(--sdc-space-sm)">${bars(channelRows())}</ul>`, "route") +
-    panel("Where they read from", `<p class="dash-note">Real readers by metro (you and machines filtered out).</p><ul class="dash-bars" style="margin-top: var(--sdc-space-sm)">${bars(places)}</ul>`, "pin") +
-    panel("Where nobody showed up", `<ul class="dash-list">${(S.notes.silences || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>`, "eyeoff");
 }
 
 const GA = "https://analytics.google.com/analytics/web/";
@@ -373,6 +362,26 @@ function siteChecks(site) {
   for (const n of site.notes || []) out.push(["info", "Note", n, !site.propertyId ? toSites : null]);
   return out;
 }
+// What the last pull read and what it left out, so a surprising count can be checked.
+function pullLines() {
+  const last = lastPull();
+  const out = [];
+  if (!last) out.push("No pull yet. The first one runs right after you connect Google Analytics.");
+  else {
+    const f = last.filtered || {};
+    const fresh = S.matches.filter((m) => (last.newMatches || []).includes(m.id));
+    const byOdds = (c) => fresh.filter((m) => m.confidence === c).length;
+    const back = (last.updatedMatches || []).length;
+    out.push(`Last pull ${esc(dot(pulledDate(last)))}, ${esc(last.source || "a pull")}${last.range ? `, covering ${esc(dot(last.range.start))} to ${esc(dot(last.range.end))}` : ""}.`);
+    if (last.events != null) out.push(`It read ${last.events} events, ${last.pageViews || 0} page views and ${last.firstVisits || 0} first visits: ${last.realReaders || 0} readers worth a look, ${last.thin || 0} too thin to score.`);
+    out.push(`<strong>New:</strong> ${byOdds("high")} high, ${byOdds("medium")} medium, ${byOdds("low")} low. ${back} earlier ${back === 1 ? "reader" : "readers"} came back.${last.ai ? ` ${last.ai} from an AI assistant.` : ""}`);
+    out.push(`Left out: your own visits ${f.own || 0}, machines ${f.machine || 0}, referral spam ${f.spam || 0}, other sites in the same property ${f["other-host"] || 0}.`);
+  }
+  out.push(`Pulls run on their own every ${S.settings.autoPullHours || 6} hours while the app is running, and right after you connect Google.`);
+  out.push(`${S.applications.length} applications and ${S.touches.length} contacts on file to score against.`);
+  return out;
+}
+
 // Notes inform; only checks that need a fix count toward the badge.
 function healthIssues() { return S.settings.sites.flatMap((s) => siteChecks(s).filter((c) => c[0] === "warn" || c[0] === "bad")); }
 
@@ -385,8 +394,7 @@ function renderHealth() {
     return panel(s.name, `<p class="dash-note" style="margin-bottom: var(--sdc-space-sm)">${esc(s.role || "")}</p><div class="dash-src">` +
       checks.map((c) => `<div><div class="dash-src__row"><span class="dash-chip dash-chip--${c[0] === "info" ? "low" : c[0]}">${LBL[c[0]]}</span><strong>${esc(c[1])}</strong></div><div class="dash-note">${esc(c[2])}</div>${act(c[3])}</div>`).join("") + "</div>", "globe", bad ? "bad" : null);
   }).join("");
-  const last = lastPull();
-  $("gaps").innerHTML = panel("Pulls", `<ul class="dash-list"><li>${last ? `Last pull ${esc(dot(pulledDate(last)))}, ${esc(last.source || "")}.` : "No pull yet."}</li><li>Pulls run on their own every ${S.settings.autoPullHours || 6} hours while the app is running, and right after you connect Google.</li><li>${S.applications.length} applications and ${S.touches.length} contacts on file to score against.</li></ul>`, "clock");
+  $("gaps").innerHTML = panel("Pulls", `<ul class="dash-list">${pullLines().map((l) => `<li>${l}</li>`).join("")}</ul>`, "clock");
 }
 
 
@@ -428,7 +436,7 @@ function alreadyApplied(job) {
 // Outreach already logged about this job (its link is in the note).
 const outreachFor = (job) => S.touches.filter((t) => companyKey(t.company) === job.companyKey && String(t.notes || "").includes(job.url)).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
 
-function leadList() {
+function leadList({ hidden: showHidden = leadsShowHidden, onlyKnown = leadsOnlyKnown } = {}) {
   const L = leadRules();
   const now = Date.now();
   const hidden = new Set((S.leads && S.leads.hidden) || []);
@@ -443,7 +451,7 @@ function leadList() {
     if (alreadyApplied(j)) { out.applied++; continue; }
     const isHidden = hidden.has(j.id);
     if (isHidden) out.hidden++;
-    if (isHidden !== leadsShowHidden) continue;
+    if (isHidden !== showHidden) continue;
 
     // How well the job fits, before anyone you know is counted.
     const why = [];
@@ -465,7 +473,7 @@ function leadList() {
     else if (people.length) score += 1;
     if (warm.length) out.known++;
     out.all++;
-    if (leadsOnlyKnown && !warm.length) continue;
+    if (onlyKnown && !warm.length) continue;
     const match = score >= 12 ? "Strong match" : score >= 8 ? "Good match" : "Possible match";
     out.shown.push({ ...j, people, warm, score, below, why, match, reached: outreachFor(j) });
   }
@@ -532,7 +540,7 @@ function renderLeads() {
   const r = leadList();
   const list = (x) => x.map((w) => w.toLowerCase()).join(", ");
   const nBoards = boardsOnCount();
-  $("leads-checked").textContent = `Checked ${dot(new Date(S.leads.checkedAt).toISOString().slice(0, 10))} · ${nBoards} job ${nBoards === 1 ? "board" : "boards"}.`;
+  $("leads-checked").textContent = `Checked ${dot(dayIn(S.leads.checkedAt, userTz()))} · ${nBoards} job ${nBoards === 1 ? "board" : "boards"}.`;
   $("leads-filters").innerHTML = `<p class="sdc-field__label" id="leads-filter-label">Show</p><div class="dash-filters" role="group" aria-labelledby="leads-filter-label">
     <button type="button" class="sdc-btn dash-filter dash-filter--all${!leadsOnlyKnown ? " sdc-btn--primary" : ""}" aria-pressed="${!leadsOnlyKnown}" data-leads-known="0">${icon("overview", "dash-icon--sm")}All matches · ${r.all}</button>
     <button type="button" class="sdc-btn dash-filter dash-filter--high${leadsOnlyKnown ? " sdc-btn--primary" : ""}" aria-pressed="${leadsOnlyKnown}" data-leads-known="1">${icon("users", "dash-icon--sm")}Where you know someone · ${r.known}</button>
@@ -684,7 +692,7 @@ function touchRows(rows) {
     rows.map((t) => {
       const [d, time] = String(t.at).split("T");
       const app = S.applications.find((a) => a.id === t.applicationId);
-      return `<tr><td><strong>${dot(d)}</strong>${time ? ` ${esc(time)}` : ""}</td><td>${esc(t.company)}</td><td>${t.linkedin && liProfile(t.linkedin) ? `<a href="${esc(liProfile(t.linkedin))}" target="_blank" rel="noopener noreferrer">${esc(t.person)}${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (LinkedIn profile, opens in a new tab)</span></a>` : esc(t.person)}</td><td>${esc(kindLabel(t.kind))}</td>` +
+      return `<tr><td><strong>${dot(d)}</strong>${time ? ` ${esc(time)}` : ""}</td><td>${esc(t.company)}</td><td>${t.linkedin && liProfile(t.linkedin) ? `<a href="${esc(liProfile(t.linkedin))}" target="_blank" rel="noopener noreferrer">${keepIcon(t.person)}<span class="sdc-u-sr-only"> (LinkedIn profile, opens in a new tab)</span></a>` : esc(t.person)}</td><td>${esc(kindLabel(t.kind))}</td>` +
         `<td>${app ? esc(`${app.company} ${app.role}`) : ""}</td><td>${esc(t.notes)}</td>` +
         `<td><button type="button" class="dash-rowbtn" data-edit-touch="${esc(t.id)}" aria-label="Edit contact with ${esc(t.person || t.company)}">${icon("edit", "dash-icon--sm")}Edit</button></td></tr>`;
     }).join("") + "</tbody></table>";
@@ -1022,7 +1030,7 @@ function signInHtml() {
     </div>
   </details>`;
 }
-const extLinkText = (label, url) => `<a href="${url}" target="_blank" rel="noopener">${esc(label)}${icon("external", "dash-icon--sm")}<span class="sdc-u-sr-only"> (opens in a new tab)</span></a>`;
+const extLinkText = (label, url) => `<a href="${url}" target="_blank" rel="noopener">${keepIcon(label)}<span class="sdc-u-sr-only"> (opens in a new tab)</span></a>`;
 
 function setupHtml() {
   const steps = setupSteps();
@@ -1124,8 +1132,8 @@ function renderSettings() {
       ${field("l-skip", "Skip titles with", textarea("l-skip", LR.skip.join("\n")), { hint: "One per line. Manager and director keep the list to individual roles." })}
       ${field("l-locations", "Locations that work", textarea("l-locations", LR.locations.join("\n")), { hint: "One per line. Leave empty to see every location." })}
       ${field("l-floor", "Pay floor", input("l-floor", String(LR.payFloor || ""), "number", 'min="0" step="1000"'), { hint: "Posted pay under this is flagged, not hidden. Pay is never guessed." })}
-      ${field("l-warmth", "Count someone as a warm contact when", select("l-warmth", String(LR.minWarmth || 2), [["3", "They wrote, called, referred or interviewed you"], ["2", "They engaged at all, including viewing your profile"], ["1", "You reached out, even with no reply"]]))}
       ${field("l-days", "Posted within", select("l-days", String(LR.postedWithinDays || 0), [["0", "Any time, while it is open"], ["30", "30 days"], ["60", "60 days"], ["90", "90 days"]]))}
+      ${field("l-warmth", "Count someone as a warm contact when", select("l-warmth", String(LR.minWarmth || 2), [["3", "They wrote, called, referred or interviewed you"], ["2", "They engaged at all, including viewing your profile"], ["1", "You reached out, even with no reply"]]), { span: true })}
       ${field("l-connect", "Connection note", textarea("l-connect", LR.connectNote), { span: true, hint: "Starting text for a connection request. {first} and {name} are the person; {role}, {company} and {link} the job; {me} and {pitch} come from your profile. Free LinkedIn accounts allow 200 characters." })}
       ${field("l-message", "Message", textarea("l-message", LR.messageNote), { span: true, hint: "Starting text when you are already connected. Same fill-ins." })}
       <div class="dash-span2 dash-inline"><button type="submit" class="sdc-btn sdc-btn--primary">Save</button><span class="dash-note" id="leads-form-status" role="status" aria-live="polite"></span></div>
@@ -1260,7 +1268,7 @@ function bindGoogleSetup(box, rerender, onConnected) {
 const LIGHT = { ok: "Can check", warn: "Needs you", failed: "Last check failed", bad: "Cannot check" };
 const leadsSettings = () => { S.settings.leads = { ...LEAD_DEFAULTS, ...(S.settings.leads || {}) }; return S.settings.leads; };
 const sourceOf = (id) => ((S.leads && S.leads.sources) || []).find((x) => x.id === id);
-const lastChecked = () => (S.leads && S.leads.checkedAt ? dot(new Date(S.leads.checkedAt).toISOString().slice(0, 10)) : "");
+const lastChecked = () => (S.leads && S.leads.checkedAt ? dot(dayIn(S.leads.checkedAt, userTz())) : "");
 const COMPANY_ATS = ["greenhouse", "lever", "ashby", "workday"];
 // Companies whose job board the app can read, from your applications and the boards you added.
 const companyBoardCount = () => new Set([
@@ -1784,8 +1792,8 @@ document.addEventListener("click", (e) => {
 /* ---------- Boot ---------- */
 
 function renderAll() {
-  renderNav(); renderTop(); renderOverview(); renderPull(); renderLatest(); renderConclusions();
-  renderReading(); renderHealth(); renderLeads(); renderApps(); renderTouches(); renderSettings();
+  renderNav(); renderTop(); renderOverview(); renderPull(); renderHealth(); renderLeads();
+  renderApps(); renderTouches(); renderSettings();
   show(false);
 }
 
@@ -1833,6 +1841,7 @@ async function start() {
   moveOldBoards();
   let saved = null; try { saved = localStorage.getItem("dash-collapsed"); } catch (e) { /* private mode */ }
   setCollapsed(narrow.matches || saved === "1", false);
+  followMoved();
   if (currentView() === "pull") applyPullParams();
   renderAll();
   if (currentView() === "settings") goToSetting();
@@ -1843,10 +1852,14 @@ async function start() {
   narrow.addEventListener("change", (e) => { if (e.matches) setCollapsed(true, false); });
   $("refresh").onclick = refresh;
   window.addEventListener("hashchange", () => {
+    followMoved();
+    renderNav();
+    if (currentView() === "overview") renderOverview();
     if (currentView() === "settings") { show(true); renderSettings(); goToSetting(); return; }
     if (currentView() === "pull") { applyPullParams(); show(!focusRead); renderPull(); return; }
     show(true);
   });
+  $("when-filters").onclick = (e) => { const b = e.target.closest("[data-when]"); if (!b) return; filterWeek = b.dataset.when === "week"; focusRead = ""; paging.pull = 0; renderPull(); $("when-filters").querySelector(`[data-when="${b.dataset.when}"]`).focus(); };
   $("filters").onclick = (e) => { const b = e.target.closest("[data-f]"); if (!b) return; filterOdds = b.dataset.f; focusRead = ""; paging.pull = 0; renderPull(); $("filters").querySelector(`[data-f="${filterOdds}"]`).focus(); };
   $("leads-check").onclick = checkLeadsNow;
   document.body.addEventListener("click", async (e) => {
@@ -1870,7 +1883,7 @@ async function start() {
         if (hiding) h.add(id); else h.delete(id);
         S.leads.hidden = [...h];
         await save("leads", S.leads);
-        renderNav(); renderLeads();
+        renderNav(); renderLeads(); renderTopJobs();
         $("leads-status").textContent = hiding ? `Hidden: ${job ? job.title : "that job"}. "Show the jobs you hid" brings it back.` : `Back on the list: ${job ? job.title : "that job"}.`;
         // Keep the keyboard where it was: the card that moved into this spot, or the one before it.
         const cards = document.querySelectorAll("#leads-list .dash-leads > li");

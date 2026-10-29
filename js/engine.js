@@ -28,6 +28,19 @@ export function partsIn(tz, utcMs) {
   return { date: `${p.year}-${p.month}-${p.day}`, hour: +p.hour % 24 };
 }
 
+// A date or an instant as "YYYY-MM-DD" on the user's own calendar: in the zone they chose, or this
+// computer's zone when none is given. Never the UTC date, which is already tomorrow on a US evening.
+// A plain date ("2026-10-27"), or a stamp at exactly midnight UTC (how many job feeds write a plain
+// date), is already a calendar day and keeps its date.
+export function dayIn(t, tz) {
+  if (typeof t === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    if (/^\d{4}-\d{2}-\d{2}T00:00(:00(\.0+)?)?(Z|[+-]00:?00)$/.test(t)) return t.slice(0, 10);
+  }
+  const ms = typeof t === "number" ? t : Date.parse(t);
+  return Number.isFinite(ms) ? partsIn(tz || undefined, ms).date : "";
+}
+
 export const hourLabel = (h) => (h % 12 || 12) + (h < 12 ? " AM" : " PM");
 
 // "2026-10-15T10:06" or "2026-10-15" in the display zone, as a UTC instant. Date-only means noon.

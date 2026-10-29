@@ -50,7 +50,7 @@ async function main() {
     return r.length;
   };
 
-  const VIEWS = ["overview", "pull", "leads", "latest", "conclusions", "reading", "health", "applications", "contacts", "settings"];
+  const VIEWS = ["overview", "pull", "pull?when=week", "leads", "health", "applications", "contacts", "settings"];
   await open(`http://localhost:${DEMO}/#overview`);
   for (const t of ["light", "dark"]) {
     await theme(t);

@@ -203,6 +203,9 @@
   .dash-appcell { min-width: 11em; }
   .dash-when { display: block; max-width: 22ch; }
   .dash-when__day { white-space: nowrap; }
+  /* The last word of a link and its external icon, kept on one line. The icon is inline here. */
+  .dash-keep { white-space: nowrap; }
+  .dash-keep .dash-icon { display: inline-block; vertical-align: -0.15em; margin-left: calc(var(--sdc-space-xs) / 4); }
   .dash-when + .dash-when { margin-top: calc(var(--sdc-space-xs) / 2); }
   .dash-when strong { font-weight: 700; }
   .dash-jd { font-weight: 600; }
@@ -247,6 +250,9 @@ button.sdc-pager:disabled { opacity: 0.35; cursor: default; background: var(--sd
   padding: calc(var(--sdc-space-xs) / 2) var(--sdc-space-xs); border: var(--sdc-control-border) solid var(--sdc-rule-strong);
   border-radius: var(--sdc-radius-sm); background: transparent; color: var(--sdc-text);
   font: inherit; font-size: var(--sdc-text-body-sm); font-weight: 600; cursor: pointer; white-space: nowrap;
+  /* Never narrower than its icon and label. In a table cell, Safari (WebKit) otherwise lets the
+     column squeeze a button below its content: Edit drew 48px wide around 64px of content. */
+  min-width: max-content;
 }
 .dash-rowbtn:hover { border-color: var(--sdc-text); }
 .dash-tag { font-size: var(--sdc-text-label); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 800; color: var(--sdc-text-mute); }
@@ -320,6 +326,8 @@ code.dash-code { font-size: var(--sdc-text-body-sm); background: var(--sdc-surfa
 
 /* Filter by odds: a label over the buttons; each button carries its odds icon in the odds color. */
 .dash-filterbar { display: grid; gap: var(--sdc-space-xs); }
+/* Application pull: the odds and When groups side by side, wrapping on a narrow window. */
+.dash-filterrow { display: flex; flex-wrap: wrap; gap: var(--sdc-space-md); align-items: end; }
 .dash-filterbar .sdc-field__label { margin: 0; }
 .dash-filter--high .dash-icon { color: var(--sdc-success); }
 .dash-filter--medium .dash-icon { color: var(--sdc-warning); }
